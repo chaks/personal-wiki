@@ -109,6 +109,12 @@ def main():
             output_path.write_text(source_path.read_text())
             print(f"  [COPY] {source_path.name} -> {output_path}")
             logger.info(f"Copied markdown: {source_path.name} -> {output_path}")
+
+            # Index the copied markdown file
+            from src.indexer import WikiIndexer
+            indexer = WikiIndexer(wiki_dir)
+            indexer.index_page(output_path)
+            logger.info(f"Indexed {output_path} in Qdrant")
             processed += 1
 
         elif source_type == "url":

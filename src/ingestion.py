@@ -8,6 +8,7 @@ from typing import Optional
 from src.extractor import EntityExtractor
 from src.wiki_writer import WikiPageWriter
 from src.link_resolver import LinkResolver
+from src.indexer import WikiIndexer
 
 logger = logging.getLogger(__name__)
 
@@ -84,9 +85,20 @@ class DoclingIngestor:
             resolver = LinkResolver(self.wiki_dir)
             resolver.resolve_all(output_path)
 
+            # Step 5: Index all generated pages in Qdrant for semantic search
+            indexer = WikiIndexer(self.wiki_dir)
+            pages_to_index = [output_path] + entity_paths + concept_paths
+            logger.info(f"Indexing {len(pages_to_index)} pages in Qdrant")
+            for page_path in pages_to_index:
+                try:
+                    indexer.index_page(page_path)
+                    logger.debug(f"Indexed: {page_path}")
+                except Exception as e:
+                    logger.warning(f"Failed to index {page_path}: {e}")
+
             logger.info(
-                f"Ingestion successful: {self.source_path.name} -> {output_path} "
-                f"({len(entity_paths)} entities, {len(concept_paths)} concepts)"
+                f"Ingestion and indexing successful: {self.source_path.name} -> {output_path} "
+                f"({len(entity_paths)} entities, {len(concept_paths)} concepts, indexed in Qdrant)"
             )
 
             return IngestionResult(

@@ -62,9 +62,12 @@ class WikiIndexer:
         return embedding
 
     def _page_id(self, page_path: Path) -> str:
-        """Generate unique ID for page."""
+        """Generate unique UUID-style ID for page."""
         rel_path = page_path.relative_to(self.wiki_dir)
-        page_id = hashlib.sha256(str(rel_path).encode()).hexdigest()[:16]
+        # Generate a UUID v5-like string from the path hash
+        hash_hex = hashlib.sha256(str(rel_path).encode()).hexdigest()
+        # Format as UUID: 8-4-4-4-12 characters
+        page_id = f"{hash_hex[:8]}-{hash_hex[8:12]}-{hash_hex[12:16]}-{hash_hex[16:20]}-{hash_hex[20:32]}"
         logger.debug(f"Generated page ID {page_id} for {rel_path}")
         return page_id
 
@@ -110,9 +113,11 @@ class WikiIndexer:
         logger.info(f"Searching wiki for: {query[:50]}... (top_k={top_k})")
         query_embedding = self._get_embedding(query)
 
-        results = self.client.search(
+        from qdrant_client.http import models
+
+        response = self.client.query_points(
             collection_name=self.COLLECTION_NAME,
-            query_vector=query_embedding,
+            query=models.NearestQuery(nearest=query_embedding),
             limit=top_k,
         )
 
@@ -122,7 +127,7 @@ class WikiIndexer:
                 "content": hit.payload["content"],
                 "score": hit.score,
             }
-            for hit in results
+            for hit in response.points
         ]
         logger.info(f"Search returned {len(result_dicts)} results")
         return result_dicts

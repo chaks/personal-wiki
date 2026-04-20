@@ -109,7 +109,7 @@ Question: {message}
 Answer based on the context above. If the context doesn't contain relevant information, say so."""
 
     logger.debug(f"Sending prompt to Ollama ({len(prompt)} chars)")
-    stream = ollama.generate(model="gemma2:2b", prompt=prompt, stream=True)
+    stream = ollama.generate(model="gemma4:e2b", prompt=prompt, stream=True)
 
     chunk_count = 0
     for chunk in stream:
