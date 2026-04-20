@@ -1,0 +1,101 @@
+# Wiki Schema Configuration
+# Defines wiki structure, categories, and LLM workflows
+
+wiki:
+  # Categories for organizing wiki pages
+  categories:
+    - entities      # Concrete things: people, organizations, products
+    - concepts      # Abstract ideas: theories, patterns, methodologies
+    - events        # Conferences, releases, milestones
+    - documents     # Source document summaries
+
+  # Frontmatter fields for all pages
+  frontmatter:
+    required:
+      - title
+      - category
+    optional:
+      - created_at
+      - updated_at
+      - links
+      - source_refs
+
+  # Link format: [[wikilink]] syntax
+  link_format: "[[{name}]]"
+
+  # Page template structure
+  template: |
+    ---
+    title: {title}
+    category: {category}
+    created_at: {created_at}
+    ---
+
+    # {title}
+
+    {content}
+
+    ## See Also
+
+    - [[related_link_1]]
+    - [[related_link_2]]
+
+ingestion:
+  # Workflow for processing sources
+  workflow:
+    - compute_hash
+    - check_registry
+    - convert_with_docling
+    - extract_entities_concepts
+    - create_or_update_pages
+    - embed_and_index
+    - update_registry
+
+  # LLM prompts for extraction
+  prompts:
+    extract_entities: |
+      Read the following document and extract key entities (concrete things like
+      people, organizations, products, technologies). For each entity, provide:
+      - Name
+      - Type (person, organization, product, technology, etc.)
+      - Brief description
+
+      Format each entity as:
+      ENTITY: <name> | <type> | <description>
+
+      Document:
+      {document}
+
+    extract_concepts: |
+      Read the following document and extract key concepts (abstract ideas like
+      theories, patterns, methodologies, principles). For each concept, provide:
+      - Name
+      - Definition
+      - Related entities
+
+      Format each concept as:
+      CONCEPT: <name> | <definition> | <related_entities>
+
+      Document:
+      {document}
+
+    resolve_links: |
+      Given the following wiki page content, identify potential links to existing
+      pages. Return a list of page titles that should be linked.
+
+      Content:
+      {content}
+
+      Existing pages: {existing_pages}
+
+maintenance:
+  # Periodic health checks
+  lint:
+    - check_orphans         # Pages with no incoming links
+    - check_contradictions  # Conflicting claims across pages
+    - check_stale_claims    # Outdated information
+    - validate_links        # Broken or circular links
+    - detect_duplicates     # Similar content across pages
+
+  # Schedule (cron format)
+  schedule: "0 3 * * *"  # Daily at 3 AM

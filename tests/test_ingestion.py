@@ -1,0 +1,123 @@
+# tests/test_ingestion.py
+import pytest
+from pathlib import Path
+from unittest.mock import Mock, patch, MagicMock
+from src.ingestion import DoclingIngestor, IngestionResult
+
+
+@pytest.fixture
+def temp_source(tmp_path):
+    """Create a temporary source file."""
+    source_file = tmp_path / "test_source.md"
+    source_file.write_text("# Test Document\n\nThis is test content.")
+    return source_file
+
+
+@pytest.fixture
+def temp_output_dir(tmp_path):
+    """Create temporary output directory."""
+    output_dir = tmp_path / "wiki" / "generated"
+    output_dir.mkdir(parents=True)
+    return output_dir
+
+
+@pytest.fixture
+def temp_wiki_dir(tmp_path):
+    """Create temporary wiki directory."""
+    wiki_dir = tmp_path / "wiki"
+    wiki_dir.mkdir(exist_ok=True)
+    return wiki_dir
+
+
+def test_ingestor_initializes(temp_source, temp_output_dir, temp_wiki_dir):
+    """Ingestor initializes with source and output paths."""
+    ingestor = DoclingIngestor(temp_source, temp_output_dir, wiki_dir=temp_wiki_dir)
+    assert ingestor.source_path == temp_source
+    assert ingestor.output_dir == temp_output_dir
+    assert ingestor.wiki_dir == temp_wiki_dir
+
+
+@patch("src.ingestion._DoclingConverter")
+def test_ingest_returns_markdown(mock_converter, temp_source, temp_output_dir, temp_wiki_dir):
+    """Ingest converts source to markdown."""
+    # Mock the converter
+    mock_instance = Mock()
+    mock_result = Mock()
+    mock_result.document.export_to_markdown.return_value = "# Converted\n\nMarkdown content"
+    mock_instance.convert.return_value = mock_result
+    mock_converter.return_value = mock_instance
+
+    ingestor = DoclingIngestor(temp_source, temp_output_dir, wiki_dir=temp_wiki_dir)
+    result = ingestor.ingest()
+
+    assert result.success is True
+    assert result.output_path == temp_output_dir / "test_source.md"
+
+
+@patch("src.ingestion._DoclingConverter")
+def test_ingest_handles_failure(mock_converter, temp_source, temp_output_dir, temp_wiki_dir):
+    """Ingest handles conversion failures gracefully."""
+    mock_instance = Mock()
+    mock_instance.convert.side_effect = Exception("Conversion failed")
+    mock_converter.return_value = mock_instance
+
+    ingestor = DoclingIngestor(temp_source, temp_output_dir, wiki_dir=temp_wiki_dir)
+    result = ingestor.ingest()
+
+    assert result.success is False
+    assert "Conversion failed" in result.error
+
+
+@patch("src.ingestion._DoclingConverter")
+@patch("src.ingestion.EntityExtractor")
+@patch("src.ingestion.WikiPageWriter")
+@patch("src.ingestion.LinkResolver")
+def test_ingest_extracts_entities_and_concepts(
+    mock_resolver_class, mock_writer_class, mock_extractor_class, mock_converter,
+    temp_source, temp_output_dir, temp_wiki_dir
+):
+    """Ingest extracts entities and concepts after conversion."""
+    # Mock converter
+    mock_instance = Mock()
+    mock_result = Mock()
+    mock_result.document.export_to_markdown.return_value = "# Test\n\nContent"
+    mock_instance.convert.return_value = mock_result
+    mock_converter.return_value = mock_instance
+
+    # Mock extractor
+    mock_extractor = Mock()
+    mock_extractor.extract.return_value = []
+    mock_extractor.extract_concepts.return_value = []
+    mock_extractor_class.return_value = mock_extractor
+
+    # Mock writer
+    mock_writer = Mock()
+    mock_writer.write_entity.return_value = temp_wiki_dir / "entity.md"
+    mock_writer.write_concept.return_value = temp_wiki_dir / "concept.md"
+    mock_writer_class.return_value = mock_writer
+
+    # Mock resolver
+    mock_resolver = Mock()
+    mock_resolver_class.return_value = mock_resolver
+
+    ingestor = DoclingIngestor(temp_source, temp_output_dir, wiki_dir=temp_wiki_dir)
+    result = ingestor.ingest()
+
+    assert result.success is True
+    mock_extractor.extract.assert_called_once()
+    mock_extractor.extract_concepts.assert_called_once()
+
+
+def test_ingestion_result_to_dict(temp_source):
+    """IngestionResult serializes to dict."""
+    result = IngestionResult(
+        success=True,
+        output_path=temp_source,
+        entity_pages=[temp_source],
+        concept_pages=[temp_source],
+    )
+    data = result.to_dict()
+    assert data["success"] is True
+    assert data["output_path"] == str(temp_source)
+    assert len(data["entity_pages"]) == 1
+    assert len(data["concept_pages"]) == 1

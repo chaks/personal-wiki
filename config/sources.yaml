@@ -1,0 +1,24 @@
+# Source configuration for Personal Wiki Chat System
+# Add sources to ingest here
+
+sources:
+  # Example PDF source:
+  # - type: pdf
+  #   path: sources/pdfs/example.pdf
+  #   tags: []
+
+  # Example URL source:
+  # - type: url
+  #   url: https://example.com/article
+  #   tags: []
+
+  # Example local markdown:
+  # - type: markdown
+  #   path: sources/markdown/notes.md
+  #   tags: []
+
+  # Example code repository:
+  # - type: code
+  #   path: sources/code/my-project
+  #   language: python
+  #   tags: []

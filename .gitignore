@@ -1,0 +1,21 @@
+# Python
+.python-version
+.venv/
+__pycache__/
+.pytest_cache/
+
+# Documentation
+docs/
+
+# Worktrees
+.worktrees/
+
+# Logs
+logs/
+*.log
+
+# Claude
+.claude/
+
+# Wiki generated content
+wiki/**/

@@ -1,0 +1,129 @@
+#!/usr/bin/env python3
+"""Ingest sources from config/sources.yaml into wiki."""
+import logging
+import sys
+import yaml
+from pathlib import Path
+
+# Add parent directory to path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+# Initialize logging for CLI
+from src.logging_config import setup_logging
+root = Path(__file__).parent.parent
+setup_logging(log_dir=root / "logs", level=logging.INFO)
+
+logger = logging.getLogger(__name__)
+
+from src.ingestion import DoclingIngestor
+from src.registry import SourceRegistry, SourceStatus
+
+
+def load_sources(config_path: Path) -> list[dict]:
+    """Load sources from YAML config."""
+    logger.debug(f"Loading sources from {config_path}")
+    with open(config_path) as f:
+        config = yaml.safe_load(f)
+    sources = config.get("sources", [])
+    logger.info(f"Loaded {len(sources)} sources from config")
+    return sources
+
+
+def main():
+    root = Path(__file__).parent.parent
+    config_path = root / "config" / "sources.yaml"
+    wiki_dir = root / "wiki"
+    state_dir = root / "state"
+
+    logger.info("Starting ingestion pipeline")
+
+    registry = SourceRegistry(state_dir / "registry.json")
+    sources = load_sources(config_path)
+
+    if not sources:
+        logger.warning("No sources configured in config/sources.yaml")
+        print("No sources configured in config/sources.yaml")
+        return
+
+    print(f"Found {len(sources)} source(s) to ingest...\n")
+    logger.info(f"Found {len(sources)} sources to ingest")
+
+    processed = 0
+    skipped = 0
+    failed = 0
+
+    for source in sources:
+        source_type = source.get("type")
+        source_id = f"{source_type}:{source.get('path') or source.get('url')}"
+        tags = source.get("tags", [])
+
+        if source_type == "pdf":
+            source_path = Path(source["path"])
+            if not source_path.exists():
+                print(f"  [SKIP] {source_path} does not exist")
+                logger.warning(f"Source not found: {source_path}")
+                skipped += 1
+                continue
+
+            content_hash = registry.compute_hash(source_path)
+            if not registry.has_source_changed(source_id, content_hash):
+                print(f"  [SKIP] {source_path.name} (unchanged)")
+                logger.debug(f"Source unchanged: {source_path.name}")
+                skipped += 1
+                continue
+
+            print(f"  [INGEST] {source_path.name}...")
+            logger.info(f"Ingesting: {source_path.name}")
+            ingestor = DoclingIngestor(source_path, wiki_dir / "generated", wiki_dir=wiki_dir)
+            result = ingestor.ingest()
+
+            if result.success:
+                print(f"    -> {result.output_path}")
+                logger.info(f"Ingested {source_path.name} -> {result.output_path}")
+                registry.add_source(
+                    source_id=source_id,
+                    source_type=source_type,
+                    path=str(source_path),
+                    content_hash=content_hash,
+                    tags=tags,
+                )
+                registry.link_wiki_page(source_id, str(result.output_path))
+                registry.update_status(source_id, SourceStatus.PROCESSED)
+                processed += 1
+            else:
+                print(f"    ERROR: {result.error}")
+                logger.error(f"Ingestion failed: {result.error}")
+                registry.update_status(source_id, SourceStatus.FAILED, result.error)
+                failed += 1
+
+        elif source_type == "markdown":
+            source_path = Path(source["path"])
+            if not source_path.exists():
+                print(f"  [SKIP] {source_path} does not exist")
+                logger.warning(f"Markdown not found: {source_path}")
+                skipped += 1
+                continue
+            # Markdown files are already in wiki format, just copy
+            output_path = wiki_dir / source_path.relative_to(source_path.parent.parent)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(source_path.read_text())
+            print(f"  [COPY] {source_path.name} -> {output_path}")
+            logger.info(f"Copied markdown: {source_path.name} -> {output_path}")
+            processed += 1
+
+        elif source_type == "url":
+            print(f"  [TODO] URL ingestion not yet implemented: {source['url']}")
+            logger.warning(f"URL ingestion not implemented: {source['url']}")
+            skipped += 1
+
+        elif source_type == "code":
+            print(f"  [TODO] Code ingestion not yet implemented: {source['path']}")
+            logger.warning(f"Code ingestion not implemented: {source['path']}")
+            skipped += 1
+
+    print("\nDone! Check the wiki/ directory for generated markdown files.")
+    logger.info(f"Ingestion complete: {processed} processed, {skipped} skipped, {failed} failed")
+
+
+if __name__ == "__main__":
+    main()
