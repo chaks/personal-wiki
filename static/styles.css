@@ -52,10 +52,11 @@ body {
 }
 
 .message.user {
-    background: #007bff;
-    color: white;
+    background: #b3d9ff;
+    color: #003366;
     margin-left: auto;
     border-bottom-right-radius: 2px;
+    max-width: 70%;
 }
 
 .message.assistant {
@@ -108,4 +109,41 @@ body {
 #send-button:disabled {
     background: #ccc;
     cursor: not-allowed;
+}
+
+/* Typing indicator animation */
+.typing-indicator {
+    display: flex;
+    gap: 4px;
+    padding: 12px 16px;
+    align-items: center;
+}
+
+.typing-dot {
+    width: 8px;
+    height: 8px;
+    background: #999;
+    border-radius: 50%;
+    animation: typing-bounce 1.4s infinite ease-in-out;
+}
+
+.typing-dot:nth-child(1) {
+    animation-delay: 0s;
+}
+
+.typing-dot:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.typing-dot:nth-child(3) {
+    animation-delay: 0.4s;
+}
+
+@keyframes typing-bounce {
+    0%, 60%, 100% {
+        transform: translateY(0);
+    }
+    30% {
+        transform: translateY(-10px);
+    }
 }

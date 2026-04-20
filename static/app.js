@@ -37,7 +37,18 @@ async function handleChat(message) {
     messageInput.disabled = true;
     sendButton.disabled = true;
 
-    const assistantMessage = addMessage('...', 'assistant');
+    const assistantMessage = document.createElement('div');
+    assistantMessage.className = 'message assistant';
+    assistantMessage.innerHTML = `
+        <div class="typing-indicator">
+            <div class="typing-dot"></div>
+            <div class="typing-dot"></div>
+            <div class="typing-dot"></div>
+        </div>
+    `;
+    messagesContainer.appendChild(assistantMessage);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
     let fullResponse = '';
 
     try {
