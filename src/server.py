@@ -13,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from src.auth import APIKeyAuthMiddleware, load_api_keys_from_env
+from src.services.health import HealthService
 from src.services.llm_provider import LLMProvider, OllamaProvider
 from src.services.vector_store import VectorStore, QdrantStore
 
@@ -24,7 +25,12 @@ class ChatRequest(BaseModel):
 
 
 class HealthResponse(BaseModel):
-    status: str
+    """Health check response model."""
+    ollama: str
+    qdrant: str
+    is_healthy: bool
+    ollama_error: Optional[str] = None
+    qdrant_error: Optional[str] = None
 
 
 def create_app(
@@ -84,7 +90,19 @@ def create_app(
     @app.get("/health", response_model=HealthResponse)
     async def health_check():
         logger.debug("Health check requested")
-        return HealthResponse(status="ok")
+        health_service = HealthService(
+            ollama_provider=llm_provider,
+            vector_store=vector_store,
+            qdrant_url=qdrant_url
+        )
+        status = health_service.check_all()
+        return HealthResponse(
+            ollama=status.ollama.value,
+            qdrant=status.qdrant.value,
+            is_healthy=status.is_healthy,
+            ollama_error=status.ollama_error,
+            qdrant_error=status.qdrant_error,
+        )
 
     @app.post("/chat")
     async def chat(request: ChatRequest) -> StreamingResponse:

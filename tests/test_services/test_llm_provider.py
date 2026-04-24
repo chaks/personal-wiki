@@ -42,3 +42,26 @@ def test_ollama_provider_handles_empty_response():
         result = provider.generate("test prompt")
 
         assert result == ""
+
+
+def test_ollama_provider_health_check_healthy():
+    """OllamaProvider health check succeeds when service is available."""
+    with patch("ollama.list") as mock_list:
+        mock_list.return_value = {"models": [{"name": "gemma4:e2b"}]}
+
+        provider = OllamaProvider(model="gemma4:e2b")
+        result = provider.health_check()
+
+        assert result is True
+        mock_list.assert_called_once()
+
+
+def test_ollama_provider_health_check_unhealthy():
+    """OllamaProvider health check fails when service is unavailable."""
+    with patch("ollama.list") as mock_list:
+        mock_list.side_effect = Exception("Connection refused")
+
+        provider = OllamaProvider(model="gemma4:e2b")
+        result = provider.health_check()
+
+        assert result is False

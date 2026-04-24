@@ -33,6 +33,15 @@ class LLMProvider(ABC):
         """
         pass
 
+    @abstractmethod
+    def health_check(self) -> bool:
+        """Check if the LLM provider is healthy.
+
+        Returns:
+            True if the provider is healthy, False otherwise
+        """
+        pass
+
 
 class OllamaProvider(LLMProvider):
     """Ollama implementation of LLM provider."""
@@ -68,3 +77,14 @@ class OllamaProvider(LLMProvider):
             response = chunk.get("response", "")
             if response:
                 yield response
+
+    def health_check(self) -> bool:
+        """Check if Ollama service is available."""
+        import ollama
+
+        try:
+            ollama.list()
+            return True
+        except Exception as e:
+            logger.error(f"Ollama health check failed: {e}")
+            return False

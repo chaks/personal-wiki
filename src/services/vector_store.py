@@ -51,6 +51,24 @@ class VectorStore(ABC):
         """
         pass
 
+    @abstractmethod
+    def health_check(self) -> bool:
+        """Check if the vector store is healthy.
+
+        Returns:
+            True if the store is healthy, False otherwise
+        """
+        pass
+
+    @abstractmethod
+    def get_collection_info(self) -> dict:
+        """Get information about collections.
+
+        Returns:
+            Dictionary with collection information
+        """
+        pass
+
 
 class QdrantStore(VectorStore):
     """Qdrant implementation of vector store."""
@@ -98,3 +116,30 @@ class QdrantStore(VectorStore):
             )
             for r in results
         ]
+
+    def health_check(self) -> bool:
+        """Check if Qdrant service is available."""
+        try:
+            self.client.get_collections()
+            return True
+        except Exception as e:
+            logger.error(f"Qdrant health check failed: {e}")
+            return False
+
+    def get_collection_info(self) -> dict:
+        """Get information about Qdrant collections.
+
+        Returns:
+            Dictionary with collection information
+        """
+        collections_response = self.client.get_collections()
+
+        collections_info = []
+        for collection in collections_response.collections:
+            collections_info.append({
+                "name": collection.name,
+                "points_count": getattr(collection, "points_count", None),
+                "vectors_count": getattr(collection, "vectors_count", None),
+            })
+
+        return {"collections": collections_info}

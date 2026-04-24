@@ -16,7 +16,7 @@ def test_dirs(tmp_path):
 
 @pytest.mark.asyncio
 async def test_server_health_endpoint(test_dirs):
-    """Server responds to health check."""
+    """Server health check returns detailed service status."""
     from src.server import create_app
 
     test_dirs["static"].mkdir(parents=True)
@@ -27,7 +27,10 @@ async def test_server_health_endpoint(test_dirs):
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get("/health")
         assert response.status_code == 200
-        assert response.json() == {"status": "ok"}
+        data = response.json()
+        assert "ollama" in data
+        assert "qdrant" in data
+        assert "is_healthy" in data
 
 
 @pytest.mark.asyncio
