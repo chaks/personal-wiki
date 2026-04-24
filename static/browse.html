@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Browse Wiki - Personal Wiki</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <style>
+        body {
+            display: block;
+            padding: 0;
+            background: #f0f2f5;
+            margin: 0;
+        }
+
+        .browse-layout {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        /* Header */
+        .browse-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 24px;
+            background: white;
+            border-bottom: 1px solid #e0e0e0;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        .browse-header h1 {
+            font-size: 1.3rem;
+            color: #333;
+            margin: 0;
+        }
+
+        .back-link {
+            color: #007bff;
+            text-decoration: none;
+            font-size: 0.95rem;
+        }
+
+        .back-link:hover {
+            text-decoration: underline;
+        }
+
+        /* Tabs */
+        .tab-bar {
+            display: flex;
+            background: white;
+            border-bottom: 2px solid #e0e0e0;
+            padding: 0 24px;
+        }
+
+        .tab-btn {
+            padding: 12px 24px;
+            border: none;
+            background: none;
+            font-size: 0.95rem;
+            color: #666;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+            transition: color 0.2s, border-color 0.2s;
+        }
+
+        .tab-btn:hover {
+            color: #333;
+        }
+
+        .tab-btn.active {
+            color: #007bff;
+            border-bottom-color: #007bff;
+            font-weight: 600;
+        }
+
+        /* Content area */
+        .browse-content {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* Left panel */
+        .list-panel {
+            width: 320px;
+            min-width: 250px;
+            border-right: 1px solid #e0e0e0;
+            background: white;
+            overflow-y: auto;
+        }
+
+        .list-panel-header {
+            padding: 16px 20px 12px;
+            font-weight: 600;
+            font-size: 0.85rem;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .list-item {
+            padding: 12px 20px;
+            cursor: pointer;
+            border-bottom: 1px solid #f0f0f0;
+            transition: background 0.15s;
+        }
+
+        .list-item:hover {
+            background: #f8f9ff;
+        }
+
+        .list-item.selected {
+            background: #e8f0fe;
+            border-left: 3px solid #007bff;
+            padding-left: 17px;
+        }
+
+        .list-item-name {
+            font-size: 0.95rem;
+            color: #333;
+        }
+
+        .list-item-type {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            margin-right: 6px;
+        }
+
+        .list-item-type.entity {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .list-item-type.concept {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .list-item-type.orphan {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        /* Right panel */
+        .preview-panel {
+            flex: 1;
+            overflow-y: auto;
+            padding: 32px 40px;
+            background: #fafbfc;
+        }
+
+        .preview-panel h2 {
+            font-size: 1.4rem;
+            color: #333;
+            margin: 0 0 8px;
+        }
+
+        .preview-panel .preview-meta {
+            font-size: 0.85rem;
+            color: #999;
+            margin-bottom: 24px;
+        }
+
+        .preview-panel .preview-body {
+            font-size: 0.95rem;
+            line-height: 1.7;
+            color: #444;
+            white-space: pre-wrap;
+        }
+
+        .preview-placeholder {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #aaa;
+            font-size: 1rem;
+        }
+
+        /* States */
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #999;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #999;
+            font-size: 0.95rem;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid #eee;
+            border-top-color: #007bff;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+
+        /* Error banner */
+        .error-banner {
+            padding: 12px 20px;
+            background: #fef2f2;
+            color: #b91c1c;
+            border-bottom: 1px solid #fecaca;
+            font-size: 0.9rem;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="browse-layout">
+        <!-- Header -->
+        <div class="browse-header">
+            <h1>Browse Wiki</h1>
+            <a href="/" class="back-link">&larr; Back to Chat</a>
+        </div>
+
+        <!-- Tabs -->
+        <div class="tab-bar">
+            <button class="tab-btn active" data-tab="entities">Entities</button>
+            <button class="tab-btn" data-tab="concepts">Concepts</button>
+            <button class="tab-btn" data-tab="orphans">Orphans</button>
+        </div>
+
+        <!-- Error banner -->
+        <div id="error-banner" class="error-banner"></div>
+
+        <!-- Content -->
+        <div class="browse-content">
+            <!-- Left panel -->
+            <div class="list-panel">
+                <div id="list-header" class="list-panel-header">Entities</div>
+                <div id="list-container">
+                    <div class="loading">
+                        <span class="spinner"></span>Loading...
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right panel -->
+            <div class="preview-panel" id="preview-panel">
+                <div class="preview-placeholder">Select an item to preview</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const tabButtons = document.querySelectorAll('.tab-btn');
+        const listHeader = document.getElementById('list-header');
+        const listContainer = document.getElementById('list-container');
+        const previewPanel = document.getElementById('preview-panel');
+        const errorBanner = document.getElementById('error-banner');
+
+        let currentTab = 'entities';
+        let selectedName = null;
+
+        const tabLabels = {
+            entities: 'Entities',
+            concepts: 'Concepts',
+            orphans: 'Orphan Pages',
+        };
+
+        // Tab switching
+        tabButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const tab = btn.dataset.tab;
+                switchTab(tab);
+            });
+        });
+
+        function switchTab(tab) {
+            currentTab = tab;
+            selectedName = null;
+
+            tabButtons.forEach(b => b.classList.remove('active'));
+            document.querySelector(`[data-tab="${tab}"]`).classList.add('active');
+
+            listHeader.textContent = tabLabels[tab];
+            previewPanel.innerHTML = '<div class="preview-placeholder">Select an item to preview</div>';
+
+            loadItems(tab);
+        }
+
+        // Load items for a tab
+        async function loadItems(tab) {
+            listContainer.innerHTML = '<div class="loading"><span class="spinner"></span>Loading...</div>';
+            hideError();
+
+            try {
+                const response = await fetch(`/api/wiki/${tab}`);
+                if (!response.ok) {
+                    throw new Error(`Server error: ${response.status}`);
+                }
+                const data = await response.json();
+                let items;
+                if (tab === 'entities') items = data.entities || [];
+                else if (tab === 'concepts') items = data.concepts || [];
+                else items = data.orphans || [];
+
+                renderList(items, tab);
+            } catch (error) {
+                listContainer.innerHTML = `<div class="empty-state">Failed to load: ${error.message}</div>`;
+                showError(`Failed to load ${tab}: ${error.message}`);
+            }
+        }
+
+        // Render list
+        function renderList(items, tab) {
+            if (items.length === 0) {
+                listContainer.innerHTML = `<div class="empty-state">No ${tab} found.</div>`;
+                return;
+            }
+
+            const listEl = document.createElement('div');
+            items.forEach(name => {
+                const item = document.createElement('div');
+                item.className = 'list-item';
+                item.dataset.name = name;
+
+                const displayName = tab === 'orphans' ? name : name.replace(/_/g, ' ');
+
+                if (tab === 'orphans') {
+                    item.innerHTML = `<span class="list-item-type orphan">orphan</span><span class="list-item-name">${escapeHtml(displayName)}</span>`;
+                } else {
+                    const typeLabel = tab === 'entities' ? 'entity' : 'concept';
+                    item.innerHTML = `<span class="list-item-type ${typeLabel}">${typeLabel}</span><span class="list-item-name">${escapeHtml(displayName)}</span>`;
+                }
+
+                item.addEventListener('click', () => selectItem(name, tab, item, listEl));
+                listEl.appendChild(item);
+            });
+
+            listContainer.innerHTML = '';
+            listContainer.appendChild(listEl);
+        }
+
+        // Select item and load preview
+        async function selectItem(name, tab, itemEl, listEl) {
+            selectedName = name;
+
+            // Update selection visual
+            listEl.querySelectorAll('.list-item').forEach(el => el.classList.remove('selected'));
+            itemEl.classList.add('selected');
+
+            previewPanel.innerHTML = '<div class="loading"><span class="spinner"></span>Loading preview...</div>';
+            hideError();
+
+            try {
+                const response = await fetch(`/api/wiki/${tab}/${encodeURIComponent(name)}`);
+                if (!response.ok) {
+                    throw new Error(`Server error: ${response.status}`);
+                }
+                const data = await response.json();
+                renderPreview(data.name, data.content, tab);
+            } catch (error) {
+                previewPanel.innerHTML = `<div class="empty-state">Failed to load preview: ${error.message}</div>`;
+                showError(`Failed to load preview: ${error.message}`);
+            }
+        }
+
+        // Render preview
+        function renderPreview(name, content, tab) {
+            const displayName = tab === 'orphans' ? name : name.replace(/_/g, ' ');
+            const typeLabel = tab === 'entities' ? 'Entity' : tab === 'concepts' ? 'Concept' : 'Orphan';
+
+            previewPanel.innerHTML = `
+                <h2>${escapeHtml(displayName)}</h2>
+                <div class="preview-meta">${escape(typeLabel)}</div>
+                <div class="preview-body">${escapeHtml(content)}</div>
+            `;
+        }
+
+        // Error helpers
+        function showError(msg) {
+            errorBanner.textContent = msg;
+            errorBanner.style.display = 'block';
+        }
+
+        function hideError() {
+            errorBanner.style.display = 'none';
+        }
+
+        // HTML escape
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function escape(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Initial load
+        loadItems('entities');
+    </script>
+</body>
+</html>

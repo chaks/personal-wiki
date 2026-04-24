@@ -151,6 +151,15 @@ def create_app(
         logger.debug("Serving manage.html")
         return FileResponse(manage_path)
 
+    @app.get("/browse")
+    async def serve_browse():
+        browse_path = static_dir / "browse.html"
+        if not browse_path.exists():
+            logger.error(f"browse.html not found at {browse_path}")
+            raise HTTPException(status_code=404, detail="browse.html not found")
+        logger.debug("Serving browse.html")
+        return FileResponse(browse_path)
+
     logger.info("FastAPI application created successfully")
     return app
 
