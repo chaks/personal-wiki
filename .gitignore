@@ -1,3 +1,5 @@
+.DS_Store
+
 # Python
 .python-version
 .venv/
@@ -19,3 +21,5 @@ logs/
 
 # Wiki generated content
 wiki/**/
+
+REVIEW-*.md

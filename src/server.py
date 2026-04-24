@@ -4,7 +4,7 @@ import json
 import logging
 import time
 from pathlib import Path
-from typing import AsyncGenerator, Optional
+from typing import AsyncGenerator, Optional, Set
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,6 +12,7 @@ from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from src.auth import APIKeyAuthMiddleware, load_api_keys_from_env
 from src.services.llm_provider import LLMProvider, OllamaProvider
 from src.services.vector_store import VectorStore, QdrantStore
 
@@ -33,6 +34,7 @@ def create_app(
     qdrant_url: str = "http://localhost:6333",
     llm_provider: Optional[LLMProvider] = None,
     vector_store: Optional[VectorStore] = None,
+    api_keys: Optional[Set[str]] = None,
 ) -> FastAPI:
     """Create and configure FASTAPI application.
 
@@ -43,6 +45,7 @@ def create_app(
         qdrant_url: Qdrant server URL (used if vector_store not provided)
         llm_provider: LLM provider instance (creates default OllamaProvider if None)
         vector_store: Vector store instance (creates default QdrantStore if None)
+        api_keys: Set of valid API keys for authentication (None = no auth)
     """
     from src.indexer import WikiIndexer
     from src.chat import ChatEngine
@@ -58,6 +61,13 @@ def create_app(
         allow_methods=["GET", "POST", "OPTIONS"],
         allow_headers=["Content-Type"],
     )
+
+    # Add API key authentication middleware if configured
+    if api_keys:
+        app.add_middleware(APIKeyAuthMiddleware, api_keys=api_keys)
+        logger.info("API key authentication middleware enabled")
+    else:
+        logger.warning("No API keys configured - authentication disabled")
 
     # Use injected services or create defaults
     if vector_store is None:
@@ -153,7 +163,16 @@ def run_server(
     """Run the server."""
     import uvicorn
 
-    app = create_app(wiki_dir, state_dir, static_dir)
+    # Load API keys from environment
+    api_keys = load_api_keys_from_env()
+    if api_keys:
+        logger.info(f"Loaded {len(api_keys)} API key(s) from environment")
+    else:
+        logger.warning(
+            "WIKI_API_KEYS environment variable not set - server will run without authentication"
+        )
+
+    app = create_app(wiki_dir, state_dir, static_dir, api_keys=api_keys if api_keys else None)
     logger.info(f"Starting uvicorn server on {host}:{port}")
     uvicorn.run(app, host=host, port=port)
 
