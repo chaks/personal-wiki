@@ -13,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from src.auth import APIKeyAuthMiddleware, load_api_keys_from_env
+from src.middleware import RateLimitMiddleware
 from src.services.health import HealthService
 from src.services.llm_provider import LLMProvider, OllamaProvider
 from src.services.vector_store import VectorStore, QdrantStore
@@ -67,6 +68,9 @@ def create_app(
         allow_methods=["GET", "POST", "OPTIONS"],
         allow_headers=["Content-Type"],
     )
+
+    # Add rate limiting middleware (per-IP, 10 requests per 60 seconds)
+    app.add_middleware(RateLimitMiddleware, max_requests=10, window_seconds=60)
 
     # Add API key authentication middleware if configured
     if api_keys:
