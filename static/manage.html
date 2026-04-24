@@ -195,6 +195,23 @@
             color: #92400e;
         }
 
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 8px;
+            flex-shrink: 0;
+        }
+
+        .status-indicator.enabled {
+            background: #28a745;
+        }
+
+        .status-indicator.disabled {
+            background: #dc3545;
+        }
+
         .source-path {
             font-size: 0.9rem;
             color: #555;
@@ -308,6 +325,13 @@
                     <input type="text" id="source-tags" placeholder="e.g., reference, tutorial">
                 </div>
 
+                <div class="form-group">
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="source-enabled" checked>
+                        <label for="source-enabled">Enabled</label>
+                    </div>
+                </div>
+
                 <button type="submit" class="add-button" id="add-button">Add Source</button>
             </form>
         </div>
@@ -337,6 +361,7 @@
         const urlInput = document.getElementById('source-url');
         const languageInput = document.getElementById('source-language');
         const tagsInput = document.getElementById('source-tags');
+        const enabledCheckbox = document.getElementById('source-enabled');
         const formMessage = document.getElementById('form-message');
         const listMessage = document.getElementById('list-message');
         const listContainer = document.getElementById('source-list-container');
@@ -403,9 +428,11 @@
                 const type = source.type || 'unknown';
                 const displayPath = source.path || source.url || '';
                 const tags = source.tags || [];
+                const isEnabled = source.enabled !== false;
 
                 let infoHtml = `
                     <div class="source-info">
+                        <span class="status-indicator ${isEnabled ? 'enabled' : 'disabled'}" title="${isEnabled ? 'Enabled' : 'Disabled'}"></span>
                         <span class="source-type ${type}">${type}</span>
                         <div class="source-path">${escapeHtml(displayPath)}</div>
                 `;
@@ -451,7 +478,7 @@
                 .map(t => t.trim())
                 .filter(t => t.length > 0);
 
-            const body = { type, tags };
+            const body = { type, tags, enabled: enabledCheckbox.checked };
 
             if (['pdf', 'markdown', 'code'].includes(type)) {
                 body.path = pathInput.value.trim();

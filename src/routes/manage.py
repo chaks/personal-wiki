@@ -17,6 +17,7 @@ class SourceInput(BaseModel):
     url: Optional[str] = Field(None, description="URL for web sources")
     language: Optional[str] = Field(None, description="Language for code sources")
     tags: List[str] = Field(default_factory=list, description="Tags for the source")
+    enabled: bool = Field(default=True, description="Whether the source is enabled")
 
 
 def _validate_path(path: str) -> None:
@@ -69,7 +70,7 @@ async def add_source(source: SourceInput):
     sources_file = _resolve_sources_file()
 
     # Build the source dict from the input
-    source_dict = {"type": source.type, "tags": source.tags}
+    source_dict = {"type": source.type, "tags": source.tags, "enabled": source.enabled}
 
     if source.path:
         _validate_path(source.path)
