@@ -139,6 +139,16 @@ personal-wiki/
 - `POST /chat` - Chat endpoint (SSE streaming)
 - `GET /` - Serve chat UI
 
+## Deployment
+
+For comprehensive deployment instructions covering local development, production, cloud providers (AWS/GCP/Azure), security, monitoring, and troubleshooting, see [DEPLOYMENT.md](DEPLOYMENT.md).
+
+**Quick production deploy with Docker Compose:**
+
+```bash
+docker compose up --build -d
+```
+
 ## Testing
 
 ```bash
