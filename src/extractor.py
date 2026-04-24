@@ -5,8 +5,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
-import ollama
 import yaml
+
+from src.services.llm_provider import LLMProvider, OllamaProvider
 
 logger = logging.getLogger(__name__)
 
@@ -52,14 +53,20 @@ Format each concept as: CONCEPT: name | definition | related_entities
 Document:
 {document}"""
 
-    def __init__(self, model: str = "gemma4:e2b", schema_path: Optional[Path] = None):
+    def __init__(
+        self,
+        model: str = "gemma4:e2b",
+        schema_path: Optional[Path] = None,
+        llm_provider: Optional[LLMProvider] = None,
+    ):
         """Initialize the extractor.
 
         Args:
             model: Ollama model to use for extraction (default: gemma4:e2b)
             schema_path: Optional path to schema.yaml for custom prompts
+            llm_provider: Optional LLM provider instance (creates default if None)
         """
-        self.model = model
+        self.llm_provider = llm_provider or OllamaProvider(model=model)
         self.entity_prompt = self.DEFAULT_ENTITY_PROMPT
         self.concept_prompt = self.DEFAULT_CONCEPT_PROMPT
 
@@ -71,7 +78,7 @@ Document:
             if default_schema.exists():
                 self._load_prompts(default_schema)
 
-        logger.debug(f"EntityExtractor initialized with model: {model}")
+        logger.debug(f"EntityExtractor initialized with provider: {type(self.llm_provider).__name__}")
 
     def _load_prompts(self, schema_path: Path) -> None:
         """Load extraction prompts from schema file.
@@ -108,12 +115,8 @@ Document:
             # Format prompt with document
             prompt = self.entity_prompt.format(document=document)
 
-            # Call Ollama API
-            response = ollama.chat(model=self.model, messages=[
-                {"role": "user", "content": prompt}
-            ])
-
-            raw_text = response.message.content or ""
+            # Use injected provider
+            raw_text = self.llm_provider.generate(prompt)
 
             # Parse entities from response
             entities = self._parse_entities(raw_text)
@@ -145,12 +148,8 @@ Document:
             # Format prompt with document
             prompt = self.concept_prompt.format(document=document)
 
-            # Call Ollama API
-            response = ollama.chat(model=self.model, messages=[
-                {"role": "user", "content": prompt}
-            ])
-
-            raw_text = response.message.content or ""
+            # Use injected provider
+            raw_text = self.llm_provider.generate(prompt)
 
             # Parse concepts from response
             concepts = self._parse_concepts(raw_text)

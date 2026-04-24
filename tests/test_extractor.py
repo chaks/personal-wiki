@@ -4,6 +4,7 @@ import pytest
 from pathlib import Path
 from unittest.mock import Mock, patch
 from src.extractor import Entity, Concept, EntityExtractor
+from src.services.llm_provider import OllamaProvider, LLMProvider
 
 
 @pytest.fixture
@@ -80,12 +81,14 @@ class TestEntityExtractor:
     def test_extractor_initializes_with_defaults(self):
         """EntityExtractor initializes with default model."""
         extractor = EntityExtractor()
-        assert extractor.model == "gemma4:e2b"
+        assert extractor.llm_provider is not None
+        assert isinstance(extractor.llm_provider, OllamaProvider)
 
     def test_extractor_custom_model(self):
         """EntityExtractor accepts custom model."""
         extractor = EntityExtractor(model="llama3")
-        assert extractor.model == "llama3"
+        assert extractor.llm_provider is not None
+        assert extractor.llm_provider.model == "llama3"
 
     @patch("src.extractor.Path")
     def test_extractor_loads_prompts_from_schema(self, mock_path):
@@ -112,23 +115,35 @@ ingestion:
         assert len(extractor.concept_prompt) > 0
 
 
+class MockLLMProvider(LLMProvider):
+    """Test double for LLM provider."""
+
+    def __init__(self, response: str = ""):
+        self.response = response
+        self.call_count = 0
+
+    def generate(self, prompt: str) -> str:
+        self.call_count += 1
+        return self.response
+
+    def generate_stream(self, prompt: str):
+        yield self.response
+
+
 class TestEntityExtraction:
     """Tests for entity extraction functionality."""
 
-    @patch("src.extractor.ollama")
-    def test_extract_entities_from_document(self, mock_ollama, sample_document):
+    def test_extract_entities_from_document(self, sample_document):
         """Extract entities from a document using LLM."""
-        mock_response = Mock()
-        mock_response.message.content = """
+        mock_provider = MockLLMProvider(response="""
         ENTITY: Andrej Karpathy | person | Computer scientist at OpenAI and Tesla
         ENTITY: OpenAI | organization | AI research organization
         ENTITY: Tesla | organization | Electric vehicle and autonomous driving company
         ENTITY: GPT-4 | product | Large language model
         ENTITY: Transformer | technology | Neural network architecture
-        """
-        mock_ollama.chat.return_value = mock_response
+        """)
 
-        extractor = EntityExtractor()
+        extractor = EntityExtractor(llm_provider=mock_provider)
         entities = extractor.extract(sample_document, source_doc="test.md")
 
         assert len(entities) == 5
@@ -136,36 +151,33 @@ class TestEntityExtraction:
         assert entities[0].entity_type == "person"
         assert "Computer scientist" in entities[0].description
 
-    @patch("src.extractor.ollama")
-    def test_extract_entities_handles_empty_response(self, mock_ollama, sample_document):
+    def test_extract_entities_handles_empty_response(self, sample_document):
         """Extract returns empty list when LLM returns empty response."""
-        mock_response = Mock()
-        mock_response.message.content = ""
-        mock_ollama.chat.return_value = mock_response
+        mock_provider = MockLLMProvider(response="")
 
-        extractor = EntityExtractor()
+        extractor = EntityExtractor(llm_provider=mock_provider)
         entities = extractor.extract(sample_document)
 
         assert entities == []
 
-    @patch("src.extractor.ollama")
-    def test_extract_entities_handles_malformed_response(self, mock_ollama, sample_document):
+    def test_extract_entities_handles_malformed_response(self, sample_document):
         """Extract returns empty list when LLM returns malformed response."""
-        mock_response = Mock()
-        mock_response.message.content = "This is not properly formatted"
-        mock_ollama.chat.return_value = mock_response
+        mock_provider = MockLLMProvider(response="This is not properly formatted")
 
-        extractor = EntityExtractor()
+        extractor = EntityExtractor(llm_provider=mock_provider)
         entities = extractor.extract(sample_document)
 
         assert entities == []
 
-    @patch("src.extractor.ollama")
-    def test_extract_entities_handles_api_error(self, mock_ollama, sample_document):
+    def test_extract_entities_handles_api_error(self, sample_document):
         """Extract returns empty list when LLM API fails."""
-        mock_ollama.chat.side_effect = Exception("API error")
+        class ErrorProvider(LLMProvider):
+            def generate(self, prompt: str) -> str:
+                raise Exception("API error")
+            def generate_stream(self, prompt: str):
+                raise Exception("API error")
 
-        extractor = EntityExtractor()
+        extractor = EntityExtractor(llm_provider=ErrorProvider())
         entities = extractor.extract(sample_document)
 
         assert entities == []
@@ -214,18 +226,15 @@ class TestEntityExtraction:
 class TestConceptExtraction:
     """Tests for concept extraction functionality."""
 
-    @patch("src.extractor.ollama")
-    def test_extract_concepts_from_document(self, mock_ollama, sample_document):
+    def test_extract_concepts_from_document(self, sample_document):
         """Extract concepts from a document using LLM."""
-        mock_response = Mock()
-        mock_response.message.content = """
+        mock_provider = MockLLMProvider(response="""
         CONCEPT: Deep Learning | Subset of ML using neural networks | Andrej Karpathy, OpenAI
         CONCEPT: Transformer Architecture | Attention-based neural network | Google, OpenAI
         CONCEPT: Autonomous Driving | Self-driving vehicle technology | Tesla
-        """
-        mock_ollama.chat.return_value = mock_response
+        """)
 
-        extractor = EntityExtractor()
+        extractor = EntityExtractor(llm_provider=mock_provider)
         concepts = extractor.extract_concepts(sample_document, source_doc="test.md")
 
         assert len(concepts) == 3
@@ -233,24 +242,24 @@ class TestConceptExtraction:
         assert "neural networks" in concepts[0].definition
         assert "Andrej Karpathy" in concepts[0].related_entities
 
-    @patch("src.extractor.ollama")
-    def test_extract_concepts_handles_empty_response(self, mock_ollama, sample_document):
+    def test_extract_concepts_handles_empty_response(self, sample_document):
         """Extract concepts returns empty list when LLM returns empty response."""
-        mock_response = Mock()
-        mock_response.message.content = ""
-        mock_ollama.chat.return_value = mock_response
+        mock_provider = MockLLMProvider(response="")
 
-        extractor = EntityExtractor()
+        extractor = EntityExtractor(llm_provider=mock_provider)
         concepts = extractor.extract_concepts(sample_document)
 
         assert concepts == []
 
-    @patch("src.extractor.ollama")
-    def test_extract_concepts_handles_api_error(self, mock_ollama, sample_document):
+    def test_extract_concepts_handles_api_error(self, sample_document):
         """Extract concepts returns empty list when LLM API fails."""
-        mock_ollama.chat.side_effect = Exception("API error")
+        class ErrorProvider(LLMProvider):
+            def generate(self, prompt: str) -> str:
+                raise Exception("API error")
+            def generate_stream(self, prompt: str):
+                raise Exception("API error")
 
-        extractor = EntityExtractor()
+        extractor = EntityExtractor(llm_provider=ErrorProvider())
         concepts = extractor.extract_concepts(sample_document)
 
         assert concepts == []
@@ -308,27 +317,28 @@ class TestConceptExtraction:
 class TestLogging:
     """Tests for logging behavior."""
 
-    @patch("src.extractor.ollama")
-    def test_extraction_logs_success(self, mock_ollama, caplog, sample_document):
+    def test_extraction_logs_success(self, caplog, sample_document):
         """Extraction logs info message on success."""
         import logging
-        mock_response = Mock()
-        mock_response.message.content = "ENTITY: Test | person | Description"
-        mock_ollama.chat.return_value = mock_response
+        mock_provider = MockLLMProvider(response="ENTITY: Test | person | Description")
 
-        extractor = EntityExtractor()
+        extractor = EntityExtractor(llm_provider=mock_provider)
         with caplog.at_level(logging.INFO):
             extractor.extract(sample_document)
 
         assert "Extracted 1 entities" in caplog.text
 
-    @patch("src.extractor.ollama")
-    def test_extraction_logs_error(self, mock_ollama, caplog, sample_document):
+    def test_extraction_logs_error(self, caplog, sample_document):
         """Extraction logs error on failure."""
         import logging
-        mock_ollama.chat.side_effect = Exception("Test error")
 
-        extractor = EntityExtractor()
+        class ErrorProvider(LLMProvider):
+            def generate(self, prompt: str) -> str:
+                raise Exception("Test error")
+            def generate_stream(self, prompt: str):
+                raise Exception("Test error")
+
+        extractor = EntityExtractor(llm_provider=ErrorProvider())
         with caplog.at_level(logging.ERROR):
             extractor.extract(sample_document)
 
