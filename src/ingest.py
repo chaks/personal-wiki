@@ -118,14 +118,69 @@ def main():
             processed += 1
 
         elif source_type == "url":
-            print(f"  [TODO] URL ingestion not yet implemented: {source['url']}")
-            logger.warning(f"URL ingestion not implemented: {source['url']}")
-            skipped += 1
+            from src.ingestion.url_ingestor import URLIngestor
+
+            url = source["url"]
+            print(f"  [INGEST] URL: {url}...")
+            logger.info(f"Ingesting URL: {url}")
+
+            ingestor = URLIngestor(url=url, wiki_dir=wiki_dir)
+            result = ingestor.ingest()
+
+            if result.success:
+                print(f"    -> {result.output_path}")
+                logger.info(f"Ingested URL {url} -> {result.output_path}")
+                registry.add_source(
+                    source_id=f"url:{url}",
+                    source_type="url",
+                    path=url,
+                    tags=tags,
+                )
+                registry.link_wiki_page(f"url:{url}", str(result.output_path))
+                registry.update_status(f"url:{url}", SourceStatus.PROCESSED)
+                processed += 1
+            else:
+                print(f"    ERROR: {result.error}")
+                logger.error(f"URL ingestion failed: {result.error}")
+                registry.update_status(f"url:{url}", SourceStatus.FAILED, result.error)
+                failed += 1
 
         elif source_type == "code":
-            print(f"  [TODO] Code ingestion not yet implemented: {source['path']}")
-            logger.warning(f"Code ingestion not implemented: {source['path']}")
-            skipped += 1
+            from src.ingestion.code_ingestor import CodeIngestor
+
+            code_path = Path(source["path"])
+            language = source.get("language", "python")
+
+            if not code_path.exists():
+                print(f"  [SKIP] Code path does not exist: {code_path}")
+                logger.warning(f"Code path not found: {code_path}")
+                skipped += 1
+                continue
+
+            print(f"  [INGEST] Code ({language}): {code_path}...")
+            logger.info(f"Ingesting code ({language}): {code_path}")
+
+            ingestor = CodeIngestor(code_dir=code_path, wiki_dir=wiki_dir, language=language)
+            result = ingestor.ingest()
+
+            if result.success:
+                if result.output_path:
+                    print(f"    -> {result.output_path}")
+                    logger.info(f"Ingested code {code_path} -> {result.output_path}")
+                    registry.add_source(
+                        source_id=f"code:{code_path}:{language}",
+                        source_type="code",
+                        path=str(code_path),
+                        tags=tags,
+                    )
+                    registry.link_wiki_page(f"code:{code_path}:{language}", str(result.output_path))
+                    registry.update_status(f"code:{code_path}:{language}", SourceStatus.PROCESSED)
+                processed += 1
+            else:
+                print(f"    ERROR: {result.error}")
+                logger.error(f"Code ingestion failed: {result.error}")
+                registry.update_status(f"code:{code_path}:{language}", SourceStatus.FAILED, result.error)
+                failed += 1
 
     print("\nDone! Check the wiki/ directory for generated markdown files.")
     logger.info(f"Ingestion complete: {processed} processed, {skipped} skipped, {failed} failed")
