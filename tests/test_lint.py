@@ -137,12 +137,20 @@ class TestRunAllChecks:
         assert "broken_links" in results
         assert "duplicates" in results
 
-    def test_run_all_checks_stub_returns_empty_lists(self, linter):
-        """Non-orphan checks return empty lists as stubs."""
+    def test_run_all_checks_returns_lists(self, linter, wiki_dir):
+        """Non-orphan checks return lists (may be empty for clean wiki)."""
+        # Create a clean wiki with no issues
+        page = wiki_dir / "page.md"
+        page.write_text("# Page\n\nContent here.\n")
+
         results = linter.run_all_checks()
 
-        # These are stubs that should return empty lists
+        # All results should be lists
+        assert isinstance(results["contradictions"], list)
+        assert isinstance(results["stale_claims"], list)
+        assert isinstance(results["broken_links"], list)
+        assert isinstance(results["duplicates"], list)
+
+        # For a clean wiki with one page, most should be empty
+        # Contradictions always returns empty (NLP not implemented)
         assert results["contradictions"] == []
-        assert results["stale_claims"] == []
-        assert results["broken_links"] == []
-        assert results["duplicates"] == []

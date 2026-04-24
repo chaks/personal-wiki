@@ -5,6 +5,10 @@ import re
 from pathlib import Path
 from typing import Optional
 
+from src.lint_checks.broken_links import BrokenLinksChecker
+from src.lint_checks.contradictions import ContradictionChecker
+from src.lint_checks.duplicates import DuplicateContentChecker
+from src.lint_checks.stale_claims import StaleClaimsChecker
 from src.utils import slugify
 
 logger = logging.getLogger(__name__)
@@ -69,6 +73,17 @@ class WikiLinter:
         """
         return page_path.stem
 
+    def _slugify(self, name: str) -> str:
+        """Convert name to safe filename.
+
+        Args:
+            name: The name to convert to a slug
+
+        Returns:
+            A slugified version of the name suitable for filenames
+        """
+        return slugify(name)
+
     def check_orphans(self) -> list[Path]:
         """Find pages with no incoming wikilinks.
 
@@ -100,16 +115,44 @@ class WikiLinter:
         logger.info(f"Found {len(orphans)} orphan pages out of {len(all_pages)} total pages")
         return orphans
 
-    def run_all_checks(self) -> dict:
+    def run_all_checks(
+        self,
+        max_age_days: int = 365,
+        similarity_threshold: float = 0.7,
+    ) -> dict:
         """Run all lint checks and return results.
+
+        Args:
+            max_age_days: Maximum age in days before a claim is considered stale
+            similarity_threshold: Minimum Jaccard similarity to flag as near-duplicate
 
         Returns:
             Dictionary with results for each check category
         """
+        # Run broken links check
+        broken_links_checker = BrokenLinksChecker(self.wiki_dir)
+        broken_links = broken_links_checker.check()
+
+        # Run duplicate content check
+        duplicate_checker = DuplicateContentChecker(
+            self.wiki_dir, similarity_threshold=similarity_threshold
+        )
+        duplicates = duplicate_checker.check()
+
+        # Run stale claims check
+        stale_claims_checker = StaleClaimsChecker(
+            self.wiki_dir, max_age_days=max_age_days
+        )
+        stale_claims = stale_claims_checker.check()
+
+        # Run contradiction check
+        contradiction_checker = ContradictionChecker(self.wiki_dir)
+        contradictions = contradiction_checker.check()
+
         return {
             "orphans": self.check_orphans(),
-            "contradictions": [],  # TODO: implement
-            "stale_claims": [],    # TODO: implement
-            "broken_links": [],    # TODO: implement
-            "duplicates": [],      # TODO: implement
+            "broken_links": broken_links,
+            "duplicates": duplicates,
+            "stale_claims": stale_claims,
+            "contradictions": contradictions,
         }
