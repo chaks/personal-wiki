@@ -1,8 +1,17 @@
 # tests/test_ingestion.py
+"""Tests for Docling ingestion pipeline."""
 import pytest
+import importlib.util
 from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
-from src.ingestion import DoclingIngestor, IngestionResult
+
+# Import from ingestion.py file (not the package)
+_spec = importlib.util.spec_from_file_location(
+    "ingestion_file",
+    Path(__file__).parent.parent / "src" / "ingestion.py"
+)
+_ingestion_file = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_ingestion_file)
 
 
 @pytest.fixture
@@ -31,13 +40,13 @@ def temp_wiki_dir(tmp_path):
 
 def test_ingestor_initializes(temp_source, temp_output_dir, temp_wiki_dir):
     """Ingestor initializes with source and output paths."""
-    ingestor = DoclingIngestor(temp_source, temp_output_dir, wiki_dir=temp_wiki_dir)
+    ingestor = _ingestion_file.DoclingIngestor(temp_source, temp_output_dir, wiki_dir=temp_wiki_dir)
     assert ingestor.source_path == temp_source
     assert ingestor.output_dir == temp_output_dir
     assert ingestor.wiki_dir == temp_wiki_dir
 
 
-@patch("src.ingestion._DoclingConverter")
+@patch.object(_ingestion_file, "_DoclingConverter")
 def test_ingest_returns_markdown(mock_converter, temp_source, temp_output_dir, temp_wiki_dir):
     """Ingest converts source to markdown."""
     # Mock the converter
@@ -47,31 +56,31 @@ def test_ingest_returns_markdown(mock_converter, temp_source, temp_output_dir, t
     mock_instance.convert.return_value = mock_result
     mock_converter.return_value = mock_instance
 
-    ingestor = DoclingIngestor(temp_source, temp_output_dir, wiki_dir=temp_wiki_dir)
+    ingestor = _ingestion_file.DoclingIngestor(temp_source, temp_output_dir, wiki_dir=temp_wiki_dir)
     result = ingestor.ingest()
 
     assert result.success is True
     assert result.output_path == temp_output_dir / "test_source.md"
 
 
-@patch("src.ingestion._DoclingConverter")
+@patch.object(_ingestion_file, "_DoclingConverter")
 def test_ingest_handles_failure(mock_converter, temp_source, temp_output_dir, temp_wiki_dir):
     """Ingest handles conversion failures gracefully."""
     mock_instance = Mock()
     mock_instance.convert.side_effect = Exception("Conversion failed")
     mock_converter.return_value = mock_instance
 
-    ingestor = DoclingIngestor(temp_source, temp_output_dir, wiki_dir=temp_wiki_dir)
+    ingestor = _ingestion_file.DoclingIngestor(temp_source, temp_output_dir, wiki_dir=temp_wiki_dir)
     result = ingestor.ingest()
 
     assert result.success is False
     assert "Conversion failed" in result.error
 
 
-@patch("src.ingestion._DoclingConverter")
-@patch("src.ingestion.EntityExtractor")
-@patch("src.ingestion.WikiPageWriter")
-@patch("src.ingestion.LinkResolver")
+@patch.object(_ingestion_file, "_DoclingConverter")
+@patch.object(_ingestion_file, "EntityExtractor")
+@patch.object(_ingestion_file, "WikiPageWriter")
+@patch.object(_ingestion_file, "LinkResolver")
 def test_ingest_extracts_entities_and_concepts(
     mock_resolver_class, mock_writer_class, mock_extractor_class, mock_converter,
     temp_source, temp_output_dir, temp_wiki_dir
@@ -98,9 +107,10 @@ def test_ingest_extracts_entities_and_concepts(
 
     # Mock resolver
     mock_resolver = Mock()
+    mock_resolver.resolve_all.return_value = []
     mock_resolver_class.return_value = mock_resolver
 
-    ingestor = DoclingIngestor(temp_source, temp_output_dir, wiki_dir=temp_wiki_dir)
+    ingestor = _ingestion_file.DoclingIngestor(temp_source, temp_output_dir, wiki_dir=temp_wiki_dir)
     result = ingestor.ingest()
 
     assert result.success is True
@@ -110,7 +120,7 @@ def test_ingest_extracts_entities_and_concepts(
 
 def test_ingestion_result_to_dict(temp_source):
     """IngestionResult serializes to dict."""
-    result = IngestionResult(
+    result = _ingestion_file.IngestionResult(
         success=True,
         output_path=temp_source,
         entity_pages=[temp_source],
