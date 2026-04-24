@@ -3,9 +3,11 @@
 import hashlib
 import logging
 from pathlib import Path
+from typing import Optional
 
 import ollama
-from qdrant_client import QdrantClient
+
+from src.services.vector_store import VectorStore, QdrantStore, SearchPoint
 
 logger = logging.getLogger(__name__)
 
@@ -17,41 +19,26 @@ class WikiIndexer:
 
     COLLECTION_NAME = "personal_wiki"
 
-    def __init__(self, wiki_dir: Path, qdrant_url: str = "http://localhost:6333"):
+    def __init__(
+        self,
+        wiki_dir: Path,
+        qdrant_url: str = "http://localhost:6333",
+        vector_store: Optional[VectorStore] = None,
+    ):
         self.wiki_dir = Path(wiki_dir)
         self.qdrant_url = qdrant_url
+        self.vector_store = vector_store
         self._client = None
-        logger.debug(f"WikiIndexer initialized: wiki_dir={wiki_dir}, qdrant_url={qdrant_url}")
+        logger.debug(f"WikiIndexer initialized: wiki_dir={wiki_dir}, vector_store={type(vector_store).__name__ if vector_store else 'QdrantStore'}")
 
     @property
     def client(self):
-        """Lazy-init Qdrant client."""
+        """Lazy-init Qdrant client for backward compatibility."""
         if self._client is None:
-            logger.info(f"Initializing Qdrant client: {self.qdrant_url}")
-            self._client = QdrantClient(url=self.qdrant_url)
-            self._ensure_collection()
-        return self._client
-
-    def _ensure_collection(self) -> None:
-        """Create collection if not exists."""
-        try:
-            from qdrant_client.http.models import Distance, VectorParams
-
-            collections = self._client.get_collections().collections
-            if not any(c.name == self.COLLECTION_NAME for c in collections):
-                logger.info(f"Creating collection: {self.COLLECTION_NAME}")
-                self._client.create_collection(
-                    collection_name=self.COLLECTION_NAME,
-                    vectors_config=VectorParams(
-                        size=EMBEDDING_DIM,
-                        distance=Distance.COSINE,
-                    ),
-                )
-                logger.info(f"Collection {self.COLLECTION_NAME} created successfully")
-            else:
-                logger.debug(f"Collection {self.COLLECTION_NAME} already exists")
-        except Exception as e:
-            logger.warning(f"Failed to ensure collection exists: {e}")
+            if self.vector_store is None:
+                self.vector_store = QdrantStore(url=self.qdrant_url)
+            logger.info(f"Initialized vector store: {type(self.vector_store).__name__}")
+        return self.vector_store
 
     def _get_embedding(self, text: str) -> list[float]:
         """Get embedding for text using Ollama."""
@@ -81,7 +68,7 @@ class WikiIndexer:
         page_id = self._page_id(page_path)
         rel_path = str(page_path.relative_to(self.wiki_dir))
 
-        logger.debug(f"Upserting page {page_id} to Qdrant")
+        logger.debug(f"Upserting page {page_id} to vector store")
         self.client.upsert(
             collection_name=self.COLLECTION_NAME,
             points=[{
@@ -113,12 +100,10 @@ class WikiIndexer:
         logger.info(f"Searching wiki for: {query[:50]}... (top_k={top_k})")
         query_embedding = self._get_embedding(query)
 
-        from qdrant_client.http import models
-
-        response = self.client.query_points(
+        results = self.client.search(
             collection_name=self.COLLECTION_NAME,
-            query=models.NearestQuery(nearest=query_embedding),
-            limit=top_k,
+            query_vector=query_embedding,
+            limit=top_k
         )
 
         result_dicts = [
@@ -127,7 +112,7 @@ class WikiIndexer:
                 "content": hit.payload["content"],
                 "score": hit.score,
             }
-            for hit in response.points
+            for hit in results
         ]
         logger.info(f"Search returned {len(result_dicts)} results")
         return result_dicts
