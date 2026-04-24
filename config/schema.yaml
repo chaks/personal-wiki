@@ -1,6 +1,14 @@
 # Wiki Schema Configuration
 # Defines wiki structure, categories, and LLM workflows
 
+services:
+  llm:
+    model: "gemma4:e2b"
+    embedding_model: "nomic-embed-text"
+  vector_store:
+    url: "http://localhost:6333"
+    collection: "personal_wiki"
+
 wiki:
   # Categories for organizing wiki pages
   categories:
@@ -42,6 +50,10 @@ wiki:
 
 ingestion:
   # Workflow for processing sources
+  output_dir: "generated"
+  enable_entity_extraction: true
+  enable_concept_extraction: true
+
   workflow:
     - compute_hash
     - check_registry
