@@ -5,9 +5,70 @@ import logging
 from pathlib import Path
 from typing import Optional, Tuple
 
+from src.history import ChatHistory
+from src.registry import SourceRegistry
 from src.services.llm_provider import LLMProvider, OllamaProvider
 
 logger = logging.getLogger(__name__)
+
+
+class ChatService:
+    """Chat service with history persistence."""
+
+    def __init__(
+        self,
+        wiki_dir: Path,
+        indexer,
+        registry: SourceRegistry,
+        llm_provider: Optional[LLMProvider] = None,
+    ):
+        self.wiki_dir = Path(wiki_dir)
+        self.indexer = indexer
+        self.llm_provider = llm_provider or OllamaProvider()
+        self.history = ChatHistory(registry.conn)
+        logger.debug(f"ChatService initialized with wiki_dir={wiki_dir}, llm_provider={type(self.llm_provider).__name__}")
+
+    def chat(self, session_id: str, question: str, top_k: int = 5) -> Tuple[str, list[dict]]:
+        """Process a chat query and save to history.
+
+        Args:
+            session_id: Unique identifier for the chat session
+            question: The user's question
+            top_k: Number of context pages to retrieve
+
+        Returns:
+            Tuple of (answer, context_pages)
+        """
+        logger.info(f"Chat request for session {session_id}: {question[:50]}...")
+
+        # Search for relevant context
+        context_pages = self.indexer.search(question, top_k) if self.indexer else []
+
+        context_text = "\n\n".join(
+            f"=== {p['path']} ===\n{p['content']}" for p in context_pages
+        )
+
+        # Sanitize user input to prevent prompt injection attacks
+        sanitized_message = html.escape(question.strip())
+
+        prompt = f"""You are a helpful assistant answering questions based on a personal knowledge wiki.
+
+Context from wiki:
+{context_text}
+
+Question: {sanitized_message}
+
+Answer based on the context above. If the context doesn't contain relevant information, say so."""
+
+        logger.debug(f"Sending prompt to LLM ({len(prompt)} chars)")
+        answer = self.llm_provider.generate(prompt) if hasattr(self.llm_provider, 'generate') else self.llm_provider.generate_stream(prompt)
+        logger.info(f"Received answer from LLM ({len(answer)} chars)")
+
+        # Save to history
+        sources = [p.get("path", "") for p in context_pages]
+        self.history.save(session_id, question, answer, sources)
+
+        return answer, context_pages
 
 
 class ChatEngine:
