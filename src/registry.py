@@ -205,3 +205,66 @@ class SourceRegistry:
         if entry and wiki_path not in entry.wiki_pages:
             entry.wiki_pages.append(wiki_path)
             self._save()
+
+
+# --- Wiki browsing utilities ---
+
+
+def _list_pages(wiki_dir: Path, namespace: str) -> list[str]:
+    """List all page names in a wiki namespace (directory).
+
+    Args:
+        wiki_dir: Root wiki directory
+        namespace: Subdirectory name (e.g., 'entities', 'concepts')
+
+    Returns:
+        Sorted list of page names (filenames without .md extension)
+    """
+    ns_dir = Path(wiki_dir) / namespace
+    pages = []
+    if ns_dir.exists():
+        for f in ns_dir.glob("*.md"):
+            pages.append(f.stem)
+    return sorted(pages)
+
+
+def list_entities(wiki_dir: Path) -> list[str]:
+    """List all entity page names in the wiki.
+
+    Args:
+        wiki_dir: Root wiki directory
+
+    Returns:
+        Sorted list of entity names
+    """
+    return _list_pages(wiki_dir, "entities")
+
+
+def list_concepts(wiki_dir: Path) -> list[str]:
+    """List all concept page names in the wiki.
+
+    Args:
+        wiki_dir: Root wiki directory
+
+    Returns:
+        Sorted list of concept names
+    """
+    return _list_pages(wiki_dir, "concepts")
+
+
+def find_orphaned_pages(wiki_dir: Path) -> list[str]:
+    """Find orphaned pages in the wiki (pages with no incoming links).
+
+    Args:
+        wiki_dir: Root wiki directory
+
+    Returns:
+        List of orphan page paths relative to wiki_dir
+    """
+    from src.lint import WikiLinter
+
+    linter = WikiLinter(Path(wiki_dir))
+    orphans = linter.check_orphans()
+    wiki_dir = Path(wiki_dir)
+    return [str(orph.relative_to(wiki_dir)) for orph in orphans]
+

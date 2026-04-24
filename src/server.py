@@ -57,8 +57,10 @@ def create_app(
     from src.indexer import WikiIndexer
     from src.chat import ChatEngine
     from src.routes.manage import router as manage_router
+    from src.routes.browse import router as browse_router
 
     app = FastAPI(title="Personal Wiki Chat")
+    app.state.wiki_dir = wiki_dir
     logger.info("Creating FastAPI application")
 
     # Security: restrict CORS to localhost only (no credentials allowed with wildcard)
@@ -86,6 +88,9 @@ def create_app(
 
     # Register source management routes
     app.include_router(manage_router)
+
+    # Register wiki browsing routes
+    app.include_router(browse_router)
 
     indexer = WikiIndexer(wiki_dir, vector_store=vector_store)
     chat_engine = ChatEngine(wiki_dir, indexer, llm_provider=llm_provider)
