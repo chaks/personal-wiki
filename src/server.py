@@ -130,13 +130,22 @@ def create_app(
 
     @app.get("/")
     async def serve_index():
-        from fastapi.responses import FileResponse
         index_path = static_dir / "index.html"
         if not index_path.exists():
             logger.error(f"index.html not found at {index_path}")
             raise HTTPException(status_code=404, detail="index.html not found")
         logger.debug("Serving index.html")
         return FileResponse(index_path)
+
+    @app.get("/manage")
+    async def serve_manage():
+        from fastapi.responses import FileResponse
+        manage_path = static_dir / "manage.html"
+        if not manage_path.exists():
+            logger.error(f"manage.html not found at {manage_path}")
+            raise HTTPException(status_code=404, detail="manage.html not found")
+        logger.debug("Serving manage.html")
+        return FileResponse(manage_path)
 
     logger.info("FastAPI application created successfully")
     return app

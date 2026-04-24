@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manage Sources - Personal Wiki</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <style>
+        body {
+            display: block;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+
+        .manage-container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .manage-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+
+        .manage-header h1 {
+            font-size: 1.5rem;
+            color: #333;
+        }
+
+        .back-link {
+            color: #007bff;
+            text-decoration: none;
+            font-size: 0.95rem;
+        }
+
+        .back-link:hover {
+            text-decoration: underline;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            padding: 24px;
+            margin-bottom: 20px;
+        }
+
+        .card h2 {
+            font-size: 1.2rem;
+            color: #333;
+            margin-bottom: 16px;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 500;
+            color: #555;
+            font-size: 0.9rem;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 10px 14px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            outline: none;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            border-color: #007bff;
+        }
+
+        .form-row {
+            display: flex;
+            gap: 16px;
+        }
+
+        .form-row .form-group {
+            flex: 1;
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            width: auto;
+        }
+
+        .add-button {
+            padding: 10px 24px;
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .add-button:hover {
+            background: #218838;
+        }
+
+        .add-button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        /* Message display */
+        .message-display {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            font-size: 0.9rem;
+            display: none;
+        }
+
+        .message-display.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .message-display.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        /* Source list */
+        .source-list {
+            list-style: none;
+        }
+
+        .source-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 14px 16px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .source-item:last-child {
+            border-bottom: none;
+        }
+
+        .source-info {
+            flex: 1;
+        }
+
+        .source-type {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            margin-right: 8px;
+        }
+
+        .source-type.pdf {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .source-type.url {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .source-type.markdown {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .source-type.code {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .source-path {
+            font-size: 0.9rem;
+            color: #555;
+        }
+
+        .source-tags {
+            margin-top: 4px;
+        }
+
+        .tag {
+            display: inline-block;
+            padding: 2px 8px;
+            background: #e9ecef;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            color: #666;
+            margin-right: 4px;
+        }
+
+        .delete-button {
+            padding: 6px 14px;
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .delete-button:hover {
+            background: #c82333;
+        }
+
+        .delete-button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #999;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #999;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #eee;
+            border-top-color: #007bff;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+    </style>
+</head>
+<body>
+    <div class="manage-container">
+        <!-- Header -->
+        <div class="manage-header">
+            <h1>Manage Sources</h1>
+            <a href="/" class="back-link">&larr; Back to Chat</a>
+        </div>
+
+        <!-- Add Source Form -->
+        <div class="card">
+            <h2>Add New Source</h2>
+
+            <div id="form-message" class="message-display"></div>
+
+            <form id="add-source-form">
+                <div class="form-group">
+                    <label for="source-type">Source Type</label>
+                    <select id="source-type" required>
+                        <option value="pdf">PDF</option>
+                        <option value="url">URL</option>
+                        <option value="markdown">Markdown</option>
+                        <option value="code">Code</option>
+                    </select>
+                </div>
+
+                <div id="path-field" class="form-group">
+                    <label for="source-path">File Path</label>
+                    <input type="text" id="source-path" placeholder="e.g., docs/report.pdf">
+                </div>
+
+                <div id="url-field" class="form-group" style="display: none;">
+                    <label for="source-url">URL</label>
+                    <input type="url" id="source-url" placeholder="e.g., https://example.com/article">
+                </div>
+
+                <div id="language-field" class="form-group" style="display: none;">
+                    <label for="source-language">Language</label>
+                    <input type="text" id="source-language" placeholder="e.g., python">
+                </div>
+
+                <div class="form-group">
+                    <label for="source-tags">Tags (comma-separated)</label>
+                    <input type="text" id="source-tags" placeholder="e.g., reference, tutorial">
+                </div>
+
+                <button type="submit" class="add-button" id="add-button">Add Source</button>
+            </form>
+        </div>
+
+        <!-- Sources List -->
+        <div class="card">
+            <h2>Configured Sources</h2>
+
+            <div id="list-message" class="message-display"></div>
+
+            <div id="source-list-container">
+                <div class="loading">
+                    <span class="spinner"></span>Loading sources...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // DOM elements
+        const form = document.getElementById('add-source-form');
+        const typeSelect = document.getElementById('source-type');
+        const pathField = document.getElementById('path-field');
+        const urlField = document.getElementById('url-field');
+        const languageField = document.getElementById('language-field');
+        const pathInput = document.getElementById('source-path');
+        const urlInput = document.getElementById('source-url');
+        const languageInput = document.getElementById('source-language');
+        const tagsInput = document.getElementById('source-tags');
+        const formMessage = document.getElementById('form-message');
+        const listMessage = document.getElementById('list-message');
+        const listContainer = document.getElementById('source-list-container');
+        const addButton = document.getElementById('add-button');
+
+        // Show/hide fields based on source type
+        function updateFields() {
+            const type = typeSelect.value;
+
+            // Show path for pdf, markdown, code
+            const showPath = ['pdf', 'markdown', 'code'].includes(type);
+            pathField.style.display = showPath ? 'block' : 'none';
+
+            // Show URL only for url type
+            urlField.style.display = type === 'url' ? 'block' : 'none';
+
+            // Show language only for code type
+            languageField.style.display = type === 'code' ? 'block' : 'none';
+        }
+
+        typeSelect.addEventListener('change', updateFields);
+
+        // Show/hide message helpers
+        function showMessage(element, text, type) {
+            element.textContent = text;
+            element.className = `message-display ${type}`;
+            element.style.display = 'block';
+            // Auto-hide after 5 seconds
+            setTimeout(() => {
+                element.style.display = 'none';
+            }, 5000);
+        }
+
+        // Load sources
+        async function loadSources() {
+            listContainer.innerHTML = '<div class="loading"><span class="spinner"></span>Loading sources...</div>';
+
+            try {
+                const response = await fetch('/api/sources');
+                if (!response.ok) {
+                    throw new Error(`Server error: ${response.status}`);
+                }
+                const data = await response.json();
+                renderSources(data.sources || []);
+            } catch (error) {
+                listContainer.innerHTML = `<div class="empty-state">Failed to load sources: ${error.message}</div>`;
+            }
+        }
+
+        // Render sources list
+        function renderSources(sources) {
+            if (sources.length === 0) {
+                listContainer.innerHTML = '<div class="empty-state">No sources configured yet. Add one above.</div>';
+                return;
+            }
+
+            const list = document.createElement('ul');
+            list.className = 'source-list';
+
+            sources.forEach((source, index) => {
+                const item = document.createElement('li');
+                item.className = 'source-item';
+
+                const type = source.type || 'unknown';
+                const displayPath = source.path || source.url || '';
+                const tags = source.tags || [];
+
+                let infoHtml = `
+                    <div class="source-info">
+                        <span class="source-type ${type}">${type}</span>
+                        <div class="source-path">${escapeHtml(displayPath)}</div>
+                `;
+
+                if (tags.length > 0) {
+                    infoHtml += '<div class="source-tags">';
+                    tags.forEach(tag => {
+                        infoHtml += `<span class="tag">${escapeHtml(tag)}</span>`;
+                    });
+                    infoHtml += '</div>';
+                }
+
+                infoHtml += '</div>';
+
+                // Create a delete button with an identifier
+                const deleteId = source.path || source.url;
+                infoHtml += `
+                    <button class="delete-button" data-path="${escapeHtml(deleteId)}" data-index="${index}">
+                        Delete
+                    </button>
+                `;
+
+                item.innerHTML = infoHtml;
+                list.appendChild(item);
+            });
+
+            listContainer.innerHTML = '';
+            listContainer.appendChild(list);
+
+            // Attach delete handlers
+            list.querySelectorAll('.delete-button').forEach(btn => {
+                btn.addEventListener('click', () => handleDelete(btn.dataset.path));
+            });
+        }
+
+        // Handle form submission
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const type = typeSelect.value;
+            const tags = tagsInput.value
+                .split(',')
+                .map(t => t.trim())
+                .filter(t => t.length > 0);
+
+            const body = { type, tags };
+
+            if (['pdf', 'markdown', 'code'].includes(type)) {
+                body.path = pathInput.value.trim();
+                if (!body.path) {
+                    showMessage(formMessage, 'Please enter a file path.', 'error');
+                    return;
+                }
+            }
+
+            if (type === 'url') {
+                body.url = urlInput.value.trim();
+                if (!body.url) {
+                    showMessage(formMessage, 'Please enter a URL.', 'error');
+                    return;
+                }
+            }
+
+            if (type === 'code') {
+                const lang = languageInput.value.trim();
+                if (lang) {
+                    body.language = lang;
+                }
+            }
+
+            addButton.disabled = true;
+            addButton.textContent = 'Adding...';
+
+            try {
+                const response = await fetch('/api/sources', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Failed to add source');
+                }
+
+                showMessage(formMessage, 'Source added successfully!', 'success');
+                form.reset();
+                updateFields();
+                loadSources();
+            } catch (error) {
+                showMessage(formMessage, error.message, 'error');
+            } finally {
+                addButton.disabled = false;
+                addButton.textContent = 'Add Source';
+            }
+        });
+
+        // Handle delete
+        async function handleDelete(path) {
+            if (!path) return;
+
+            if (!confirm(`Delete source "${path}"?`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/sources/path/${encodeURIComponent(path)}`, {
+                    method: 'DELETE',
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Failed to delete source');
+                }
+
+                showMessage(listMessage, 'Source deleted successfully.', 'success');
+                loadSources();
+            } catch (error) {
+                showMessage(listMessage, error.message, 'error');
+            }
+        }
+
+        // HTML escape helper
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Load sources on page load
+        loadSources();
+        updateFields();
+    </script>
+</body>
+</html>
