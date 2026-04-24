@@ -7,6 +7,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
+from src.utils import slugify
+
 logger = logging.getLogger(__name__)
 
 
@@ -97,17 +99,10 @@ class WikiMaintainer:
         category_dir = self.wiki_dir / page.category
         category_dir.mkdir(parents=True, exist_ok=True)
 
-        filename = self._slugify(page.title) + ".md"
+        filename = slugify(page.title) + ".md"
         file_path = category_dir / filename
 
         markdown = page.to_markdown()
         file_path.write_text(markdown)
         logger.debug(f"Saved {len(markdown)} chars to {file_path}")
         return file_path
-
-    def _slugify(self, title: str) -> str:
-        """Convert title to filename-safe slug."""
-        slug = title.lower()
-        slug = re.sub(r"[^\w\s-]", "", slug)
-        slug = re.sub(r"[\s_]+", "-", slug)
-        return slug.strip("-")

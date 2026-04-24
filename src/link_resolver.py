@@ -5,6 +5,8 @@ import re
 from datetime import datetime
 from pathlib import Path
 
+from src.utils import slugify
+
 logger = logging.getLogger(__name__)
 
 _WIKILINK_PATTERN = r"\[\[([^\]]+)\]\]"
@@ -30,19 +32,6 @@ class LinkResolver:
 
         logger.debug(f"LinkResolver initialized with wiki_dir: {wiki_dir}")
 
-    def _slugify(self, name: str) -> str:
-        """Convert name to safe filename.
-
-        Args:
-            name: The name to convert to a slug
-
-        Returns:
-            A slugified version of the name suitable for filenames
-        """
-        slug = name.lower().replace(" ", "-").replace("/", "-")
-        slug = "".join(c for c in slug if c.isalnum() or c in "-_")
-        return slug
-
     def extract_links(self, content: str) -> list[str]:
         """Extract all wikilinks from content.
 
@@ -67,7 +56,7 @@ class LinkResolver:
         Returns:
             True if page exists, False otherwise
         """
-        slug = self._slugify(title)
+        slug = slugify(title)
 
         # Check entities directory
         entity_path = self.entities_dir / f"{slug}.md"
@@ -95,7 +84,7 @@ class LinkResolver:
         Returns:
             Path to the created placeholder page
         """
-        slug = self._slugify(title)
+        slug = slugify(title)
         placeholder_path = self.entities_dir / f"{slug}.md"
 
         # Ensure entities directory exists

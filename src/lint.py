@@ -5,6 +5,8 @@ import re
 from pathlib import Path
 from typing import Optional
 
+from src.utils import slugify
+
 logger = logging.getLogger(__name__)
 
 
@@ -20,19 +22,6 @@ class WikiLinter:
             wiki_dir: Root directory for the wiki
         """
         self.wiki_dir = Path(wiki_dir)
-
-    def _slugify(self, name: str) -> str:
-        """Convert name to slug (same as WikiPageWriter).
-
-        Args:
-            name: The name to convert to a slug
-
-        Returns:
-            A slugified version of the name suitable for filenames
-        """
-        slug = name.lower().replace(" ", "-").replace("/", "-")
-        slug = "".join(c for c in slug if c.isalnum() or c in "-_")
-        return slug
 
     def _find_all_wiki_pages(self) -> list[Path]:
         """Find all wiki pages in the wiki directory.
@@ -65,7 +54,7 @@ class WikiLinter:
         for match in re.finditer(self.WIKILINK_PATTERN, content):
             title = match.group(1)
             # Slugify the linked title for comparison
-            linked_titles.add(self._slugify(title))
+            linked_titles.add(slugify(title))
 
         return linked_titles
 

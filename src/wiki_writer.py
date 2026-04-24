@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Optional
 
 from src.extractor import Entity, Concept
+from src.utils import slugify
 
 logger = logging.getLogger(__name__)
 
@@ -31,19 +32,6 @@ class WikiPageWriter:
 
         logger.debug(f"WikiPageWriter initialized with wiki_dir: {wiki_dir}")
 
-    def _slugify(self, name: str) -> str:
-        """Convert name to safe filename.
-
-        Args:
-            name: The name to convert to a slug
-
-        Returns:
-            A slugified version of the name suitable for filenames
-        """
-        slug = name.lower().replace(" ", "-").replace("/", "-")
-        slug = "".join(c for c in slug if c.isalnum() or c in "-_")
-        return slug
-
     def write_entity(self, entity: Entity) -> Optional[Path]:
         """Write an entity page.
 
@@ -53,7 +41,7 @@ class WikiPageWriter:
         Returns:
             Path to the written file, or None if writing failed
         """
-        slug = self._slugify(entity.name)
+        slug = slugify(entity.name)
         output_path = self.entities_dir / f"{slug}.md"
 
         # Path validation: ensure the output path stays within the intended directory
@@ -86,7 +74,7 @@ class WikiPageWriter:
         Returns:
             Path to the written file, or None if writing failed
         """
-        slug = self._slugify(concept.name)
+        slug = slugify(concept.name)
         output_path = self.concepts_dir / f"{slug}.md"
 
         # Path validation: ensure the output path stays within the intended directory

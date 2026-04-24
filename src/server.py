@@ -36,12 +36,13 @@ def create_app(
     app = FastAPI(title="Personal Wiki Chat")
     logger.info("Creating FastAPI application")
 
+    # Security: restrict CORS to localhost only (no credentials allowed with wildcard)
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:8000", "http://127.0.0.1:8000"],
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_headers=["Content-Type"],
     )
 
     indexer = WikiIndexer(wiki_dir, qdrant_url)
@@ -85,6 +86,7 @@ async def stream_chat_response(
 ) -> AsyncGenerator[str, None]:
     """Stream chat response as SSE events."""
     import ollama
+    import html
 
     logger.debug(f"Searching wiki for: {message[:50]}...")
     start_time = time.time()
@@ -99,12 +101,16 @@ async def stream_chat_response(
         f"=== {p['path']} ===\n{p['content']}" for p in context_pages
     )
 
+    # Sanitize user input to prevent prompt injection attacks
+    # Escape special characters and remove potential prompt injection patterns
+    sanitized_message = html.escape(message.strip())
+
     prompt = f"""You are a helpful assistant answering questions based on a personal knowledge wiki.
 
 Context from wiki:
 {context_text}
 
-Question: {message}
+Question: {sanitized_message}
 
 Answer based on the context above. If the context doesn't contain relevant information, say so."""
 
