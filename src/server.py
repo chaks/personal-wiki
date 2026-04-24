@@ -4,13 +4,16 @@ import json
 import logging
 import time
 from pathlib import Path
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+
+from src.services.llm_provider import LLMProvider, OllamaProvider
+from src.services.vector_store import VectorStore, QdrantStore
 
 logger = logging.getLogger(__name__)
 
@@ -28,8 +31,19 @@ def create_app(
     state_dir: Path,
     static_dir: Path,
     qdrant_url: str = "http://localhost:6333",
+    llm_provider: Optional[LLMProvider] = None,
+    vector_store: Optional[VectorStore] = None,
 ) -> FastAPI:
-    """Create and configure FastAPI application."""
+    """Create and configure FASTAPI application.
+
+    Args:
+        wiki_dir: Path to wiki content directory
+        state_dir: Path to state directory
+        static_dir: Path to static files directory
+        qdrant_url: Qdrant server URL (used if vector_store not provided)
+        llm_provider: LLM provider instance (creates default OllamaProvider if None)
+        vector_store: Vector store instance (creates default QdrantStore if None)
+    """
     from src.indexer import WikiIndexer
     from src.chat import ChatEngine
 
@@ -45,9 +59,13 @@ def create_app(
         allow_headers=["Content-Type"],
     )
 
-    indexer = WikiIndexer(wiki_dir, qdrant_url)
-    chat_engine = ChatEngine(wiki_dir, indexer)
-    logger.info("Initialized WikiIndexer and ChatEngine")
+    # Use injected services or create defaults
+    if vector_store is None:
+        vector_store = QdrantStore(url=qdrant_url)
+
+    indexer = WikiIndexer(wiki_dir, vector_store=vector_store)
+    chat_engine = ChatEngine(wiki_dir, indexer, llm_provider=llm_provider)
+    logger.info("Initialized WikiIndexer and ChatEngine with injected services")
 
     static_dir.mkdir(parents=True, exist_ok=True)
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
@@ -85,7 +103,6 @@ async def stream_chat_response(
     chat_engine,
 ) -> AsyncGenerator[str, None]:
     """Stream chat response as SSE events."""
-    import ollama
     import html
 
     logger.debug(f"Searching wiki for: {message[:50]}...")
@@ -102,7 +119,6 @@ async def stream_chat_response(
     )
 
     # Sanitize user input to prevent prompt injection attacks
-    # Escape special characters and remove potential prompt injection patterns
     sanitized_message = html.escape(message.strip())
 
     prompt = f"""You are a helpful assistant answering questions based on a personal knowledge wiki.
@@ -114,12 +130,11 @@ Question: {sanitized_message}
 
 Answer based on the context above. If the context doesn't contain relevant information, say so."""
 
-    logger.debug(f"Sending prompt to Ollama ({len(prompt)} chars)")
-    stream = ollama.generate(model="gemma4:e2b", prompt=prompt, stream=True)
+    logger.debug(f"Sending prompt to LLM ({len(prompt)} chars)")
+    stream = chat_engine.llm_provider.generate_stream(prompt)
 
     chunk_count = 0
-    for chunk in stream:
-        response_text = chunk.get("response", "")
+    for response_text in stream:
         if response_text:
             chunk_count += 1
             yield f"data: {json.dumps({'text': response_text})}\n\n"

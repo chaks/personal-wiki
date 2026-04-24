@@ -2,6 +2,9 @@
 """Chat query handling with RAG."""
 import logging
 from pathlib import Path
+from typing import Optional
+
+from src.services.llm_provider import LLMProvider, OllamaProvider
 
 logger = logging.getLogger(__name__)
 
@@ -9,10 +12,16 @@ logger = logging.getLogger(__name__)
 class ChatEngine:
     """Handles chat queries with wiki retrieval."""
 
-    def __init__(self, wiki_dir: Path, indexer):
+    def __init__(
+        self,
+        wiki_dir: Path,
+        indexer,
+        llm_provider: Optional[LLMProvider] = None,
+    ):
         self.wiki_dir = Path(wiki_dir)
         self.indexer = indexer
-        logger.debug(f"ChatEngine initialized with wiki_dir={wiki_dir}")
+        self.llm_provider = llm_provider or OllamaProvider()
+        logger.debug(f"ChatEngine initialized with wiki_dir={wiki_dir}, llm_provider={type(self.llm_provider).__name__}")
 
     def search(self, query: str, top_k: int = 5) -> list[dict]:
         """Search wiki for relevant context."""
