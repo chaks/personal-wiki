@@ -91,3 +91,39 @@ class TestChatHistory:
         assert recent[0]["question"] == "Question 4"
         assert recent[1]["question"] == "Question 3"
         assert recent[2]["question"] == "Question 2"
+
+    def test_clear_session(self, temp_db):
+        """Test that clear_session deletes all history entries for a session."""
+        history = ChatHistory(temp_db)
+
+        # Save multiple history entries for different sessions
+        for i in range(3):
+            history.save(
+                session_id="test-session-clear",
+                question=f"Question {i}",
+                answer=f"Answer {i}",
+                sources=[f"source{i}.md"],
+            )
+
+        history.save(
+            session_id="test-session-keep",
+            question="Question to keep",
+            answer="Answer to keep",
+            sources=["source-keep.md"],
+        )
+
+        # Verify entries exist before clearing
+        session_before = history.get_session("test-session-clear")
+        assert len(session_before) == 3
+
+        # Clear the session
+        history.clear_session("test-session-clear")
+
+        # Verify entries for the cleared session are deleted
+        session_after = history.get_session("test-session-clear")
+        assert len(session_after) == 0
+
+        # Verify other sessions are not affected
+        other_session = history.get_session("test-session-keep")
+        assert len(other_session) == 1
+        assert other_session[0]["question"] == "Question to keep"

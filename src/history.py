@@ -36,8 +36,8 @@ class ChatHistory:
         sources_json = json.dumps(sources)
         self.conn.execute(
             """
-            INSERT INTO chat_history (session_id, question, answer, sources)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO chat_history (session_id, question, answer, sources, created_at)
+            VALUES (?, ?, ?, ?, datetime('now'))
             """,
             (session_id, question, answer, sources_json),
         )
@@ -66,7 +66,11 @@ class ChatHistory:
         results = []
         for row in rows:
             sources_str = row[4]
-            sources = json.loads(sources_str) if sources_str else []
+            try:
+                sources = json.loads(sources_str) if sources_str else []
+            except json.JSONDecodeError:
+                logger.warning(f"Failed to parse sources for entry {row[0]}, using empty list")
+                sources = []
             results.append({
                 "id": row[0],
                 "session_id": row[1],
@@ -107,7 +111,11 @@ class ChatHistory:
         results = []
         for row in rows:
             sources_str = row[4]
-            sources = json.loads(sources_str) if sources_str else []
+            try:
+                sources = json.loads(sources_str) if sources_str else []
+            except json.JSONDecodeError:
+                logger.warning(f"Failed to parse sources for entry {row[0]}, using empty list")
+                sources = []
             results.append({
                 "id": row[0],
                 "session_id": row[1],

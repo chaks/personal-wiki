@@ -91,7 +91,6 @@ class SourceRegistry:
         self.conn = sqlite3.connect(str(self.db_path))
         logger.debug(f"Initializing SourceRegistry: {registry_path}")
         self._init_db()
-        self._init_db()
         self._load()
 
     def _init_db(self) -> None:
