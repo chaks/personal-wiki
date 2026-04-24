@@ -263,8 +263,7 @@ def find_orphaned_pages(wiki_dir: Path) -> list[str]:
     """
     from src.lint import WikiLinter
 
-    linter = WikiLinter(Path(wiki_dir))
+    linter = WikiLinter(wiki_dir)
     orphans = linter.check_orphans()
-    wiki_dir = Path(wiki_dir)
     return [str(orph.relative_to(wiki_dir)) for orph in orphans]
 

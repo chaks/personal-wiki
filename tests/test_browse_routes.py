@@ -184,8 +184,8 @@ async def test_list_orphans(wiki_with_pages):
         data = response.json()
         assert "orphans" in data
         assert isinstance(data["orphans"], list)
-        # With no cross-links, all pages should be orphans
-        assert len(data["orphans"]) >= 0  # At least returns successfully
+        # With no cross-links, all pages should be orphans (4 pages)
+        assert len(data["orphans"]) == 4
 
 
 @pytest.mark.asyncio
@@ -199,3 +199,24 @@ async def test_browse_routes_registered(wiki_with_pages):
     assert "/api/wiki/entities" in route_paths
     assert "/api/wiki/concepts" in route_paths
     assert "/api/wiki/orphans" in route_paths
+
+
+@pytest.mark.asyncio
+async def test_path_traversal_rejected(wiki_with_pages):
+    """GET /api/wiki/entities/{name} returns 400 for traversal attempts."""
+    from src.server import create_app
+
+    app = create_app(wiki_with_pages["wiki"], wiki_with_pages["state"], wiki_with_pages["static"])
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        # URL-encoded .. reaches the handler and should be rejected
+        response = await client.get("/api/wiki/entities/%2e%2e")
+        assert response.status_code == 400
+
+        # URL-encoded .. in nested path should also be rejected
+        response = await client.get("/api/wiki/concepts/%2e%2e/python")
+        assert response.status_code == 400
+
+        # Absolute path attempt via double-slash
+        response = await client.get("/api/wiki/entities//etc/passwd")
+        assert response.status_code == 400
