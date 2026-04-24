@@ -92,3 +92,22 @@ async def list_orphans(request: Request):
     # Return relative paths as strings
     orphan_paths = [str(orph.relative_to(wiki_dir)) for orph in orphans]
     return {"orphans": orphan_paths}
+
+
+@router.get("/orphans/{name:path}")
+async def get_orphan(name: str, request: Request):
+    """Get the content of an orphaned wiki page by its relative path."""
+    _validate_name(name)
+    wiki_dir = _get_wiki_dir(request)
+
+    # Resolve relative to wiki_dir (orphan paths are like 'entities/foo.md')
+    orphan_path = (wiki_dir / name).resolve()
+    wiki_dir_resolved = wiki_dir.resolve()
+
+    if not orphan_path.is_relative_to(wiki_dir_resolved):
+        raise HTTPException(status_code=400, detail="Invalid orphan path")
+
+    if not orphan_path.exists() or not orphan_path.is_file():
+        raise HTTPException(status_code=404, detail=f"Orphan page '{name}' not found")
+
+    return {"name": name, "content": orphan_path.read_text()}

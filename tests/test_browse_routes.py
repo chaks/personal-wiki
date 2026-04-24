@@ -189,6 +189,54 @@ async def test_list_orphans(wiki_with_pages):
 
 
 @pytest.mark.asyncio
+async def test_get_orphan_content(wiki_with_pages):
+    """GET /api/wiki/orphans/{name} returns 200 with orphan page content."""
+    from src.server import create_app
+
+    app = create_app(wiki_with_pages["wiki"], wiki_with_pages["state"], wiki_with_pages["static"])
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        # First list orphans to get a valid path
+        response = await client.get("/api/wiki/orphans")
+        assert response.status_code == 200
+        orphan_paths = response.json()["orphans"]
+        assert len(orphan_paths) > 0
+
+        # Fetch content of the first orphan
+        orphan_path = orphan_paths[0]  # e.g., "entities/python.md"
+        response = await client.get(f"/api/wiki/orphans/{orphan_path}")
+        assert response.status_code == 200
+        data = response.json()
+        assert "name" in data
+        assert "content" in data
+        assert data["name"] == orphan_path
+
+
+@pytest.mark.asyncio
+async def test_get_orphan_not_found(wiki_with_pages):
+    """GET /api/wiki/orphans/{name} returns 404 for nonexistent path."""
+    from src.server import create_app
+
+    app = create_app(wiki_with_pages["wiki"], wiki_with_pages["state"], wiki_with_pages["static"])
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/api/wiki/orphans/nonexistent/path.md")
+        assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_orphan_path_traversal_rejected(wiki_with_pages):
+    """GET /api/wiki/orphans/{name} returns 400 for traversal attempts."""
+    from src.server import create_app
+
+    app = create_app(wiki_with_pages["wiki"], wiki_with_pages["state"], wiki_with_pages["static"])
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/api/wiki/orphans/%2e%2e/%2e%2e/etc/passwd")
+        assert response.status_code == 400
+
+
+@pytest.mark.asyncio
 async def test_browse_routes_registered(wiki_with_pages):
     """Verify /api/wiki routes are in app."""
     from src.server import create_app
