@@ -320,7 +320,7 @@ For Ollama, use a separate Cloud Run service with GPU acceleration, or run it on
 
 **GKE**
 
-For Kubernetes-based deployment, create a `k8s/` directory with Deployments and Services for each component (Qdrant, Ollant, app), plus PersistentVolumeClaims for data.
+For Kubernetes-based deployment, create a `k8s/` directory with Deployments and Services for each component (Qdrant, Ollama, app), plus PersistentVolumeClaims for data.
 
 ### Azure
 
@@ -559,7 +559,7 @@ Schedule regular backups using cron:
 
 **Problem: High memory usage**
 
-- Qdrant loads all vectors into RAM. Large wikets may require more memory.
+- Qdrant loads all vectors into RAM. Large wikis may require more memory.
 - Increase the Docker memory limit or adjust Qdrant's `optimizers.memmap_threshold` in its configuration.
 
 ### Application
