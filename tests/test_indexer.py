@@ -32,6 +32,31 @@ class MockVectorStore(VectorStore):
             )
         ]
 
+    async def search_async(
+        self,
+        collection_name: str,
+        query_vector: list[float],
+        limit: int = 5
+    ) -> list[SearchPoint]:
+        self.search_queries.append((query_vector, limit))
+        return [
+            SearchPoint(
+                id="test-id",
+                score=0.95,
+                payload={"path": "test.md", "content": "test content"}
+            )
+        ]
+
+    async def upsert_async(self, collection_name: str, points: list[dict]) -> bool:
+        self.upserted_points.extend(points)
+        return True
+
+    def health_check(self) -> bool:
+        return True
+
+    def get_collection_info(self) -> dict:
+        return {"collections": []}
+
 
 @pytest.fixture
 def wiki_dir(tmp_path):

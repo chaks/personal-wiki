@@ -1,8 +1,9 @@
 # src/chat.py
 """Chat query handling with RAG."""
+import html
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 
 from src.services.llm_provider import LLMProvider, OllamaProvider
 
@@ -56,3 +57,59 @@ class ChatEngine:
 
         logger.info(f"Keyword search returned {len(results)} results")
         return results[:top_k]
+
+    async def search_async(self, query: str, top_k: int = 5) -> list[dict]:
+        """Asynchronously search wiki for relevant context."""
+        logger.info(f"Async search request: query='{query[:50]}...', top_k={top_k}")
+        try:
+            results = await self.indexer.search_async(query, top_k)
+            if results:
+                logger.info(f"Async vector search found {len(results)} results")
+            else:
+                logger.debug("Async vector search returned no results")
+            return results
+        except Exception as e:
+            logger.warning(f"Async vector search failed: {e}, falling back to keyword search")
+            # Fallback: keyword search over wiki files
+            return self._keyword_search(query, top_k)
+
+    async def query_async(self, query: str, top_k: int = 5) -> Tuple[str, list[dict]]:
+        """Asynchronously query the wiki and get an answer.
+
+        Args:
+            query: The user's question
+            top_k: Number of context pages to retrieve
+
+        Returns:
+            Tuple of (answer, context_pages)
+        """
+        logger.info(f"Async query request: {query[:50]}...")
+
+        # Search for relevant context
+        try:
+            context_pages = await self.search_async(query, top_k)
+        except Exception as e:
+            logger.error(f"Search failed: {e}")
+            context_pages = []
+
+        context_text = "\n\n".join(
+            f"=== {p['path']} ===\n{p['content']}" for p in context_pages
+        )
+
+        # Sanitize user input to prevent prompt injection attacks
+        sanitized_message = html.escape(query.strip())
+
+        prompt = f"""You are a helpful assistant answering questions based on a personal knowledge wiki.
+
+Context from wiki:
+{context_text}
+
+Question: {sanitized_message}
+
+Answer based on the context above. If the context doesn't contain relevant information, say so."""
+
+        logger.debug(f"Sending prompt to LLM ({len(prompt)} chars)")
+        answer = await self.llm_provider.generate_async(prompt)
+        logger.info(f"Received answer from LLM ({len(answer)} chars)")
+
+        return answer, context_pages

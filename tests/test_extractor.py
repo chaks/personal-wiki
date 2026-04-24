@@ -129,6 +129,15 @@ class MockLLMProvider(LLMProvider):
     def generate_stream(self, prompt: str):
         yield self.response
 
+    def health_check(self) -> bool:
+        return True
+
+    async def generate_async(self, prompt: str) -> str:
+        return self.response
+
+    async def generate_stream_async(self, prompt: str):
+        yield self.response
+
 
 class TestEntityExtraction:
     """Tests for entity extraction functionality."""
@@ -175,6 +184,12 @@ class TestEntityExtraction:
             def generate(self, prompt: str) -> str:
                 raise Exception("API error")
             def generate_stream(self, prompt: str):
+                raise Exception("API error")
+            def health_check(self) -> bool:
+                return True
+            async def generate_async(self, prompt: str) -> str:
+                raise Exception("API error")
+            async def generate_stream_async(self, prompt: str):
                 raise Exception("API error")
 
         extractor = EntityExtractor(llm_provider=ErrorProvider())
@@ -258,6 +273,12 @@ class TestConceptExtraction:
                 raise Exception("API error")
             def generate_stream(self, prompt: str):
                 raise Exception("API error")
+            def health_check(self) -> bool:
+                return True
+            async def generate_async(self, prompt: str) -> str:
+                raise Exception("API error")
+            async def generate_stream_async(self, prompt: str):
+                raise Exception("API error")
 
         extractor = EntityExtractor(llm_provider=ErrorProvider())
         concepts = extractor.extract_concepts(sample_document)
@@ -336,6 +357,12 @@ class TestLogging:
             def generate(self, prompt: str) -> str:
                 raise Exception("Test error")
             def generate_stream(self, prompt: str):
+                raise Exception("Test error")
+            def health_check(self) -> bool:
+                return True
+            async def generate_async(self, prompt: str) -> str:
+                raise Exception("Test error")
+            async def generate_stream_async(self, prompt: str):
                 raise Exception("Test error")
 
         extractor = EntityExtractor(llm_provider=ErrorProvider())

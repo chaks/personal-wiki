@@ -18,6 +18,15 @@ class MockLLMProvider(LLMProvider):
     def generate_stream(self, prompt: str):
         yield self.response
 
+    def health_check(self) -> bool:
+        return True
+
+    async def generate_async(self, prompt: str) -> str:
+        return self.response
+
+    async def generate_stream_async(self, prompt: str):
+        yield self.response
+
 
 def test_extractor_uses_llm_provider():
     """EntityExtractor uses injected LLM provider."""

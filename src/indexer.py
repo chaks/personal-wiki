@@ -1,5 +1,6 @@
 # src/indexer.py
 """Qdrant-based semantic indexing for wiki pages."""
+import asyncio
 import hashlib
 import logging
 from pathlib import Path
@@ -115,4 +116,86 @@ class WikiIndexer:
             for hit in results
         ]
         logger.info(f"Search returned {len(result_dicts)} results")
+        return result_dicts
+
+    async def _get_embedding_async(self, text: str) -> list[float]:
+        """Get embedding for text using Ollama asynchronously."""
+        logger.debug(f"Generating embedding for {len(text)} chars")
+        # ollama doesn't have native async support, so we use asyncio.to_thread
+        response = await asyncio.to_thread(
+            ollama.embeddings, model="nomic-embed-text", prompt=text
+        )
+        embedding = response["embedding"]
+        logger.debug(f"Generated embedding with {len(embedding)} dimensions")
+        return embedding
+
+    async def index_page_async(self, page_path: Path) -> None:
+        """Embed and index a wiki page asynchronously."""
+        logger.info(f"Indexing page: {page_path}")
+        content = page_path.read_text()
+        logger.debug(f"Read {len(content)} chars from {page_path}")
+
+        embedding = await self._get_embedding_async(content)
+        page_id = self._page_id(page_path)
+        rel_path = str(page_path.relative_to(self.wiki_dir))
+
+        logger.debug(f"Upserting page {page_id} to vector store")
+        await self.client.upsert_async(
+            collection_name=self.COLLECTION_NAME,
+            points=[{
+                "id": page_id,
+                "vector": embedding,
+                "payload": {
+                    "path": rel_path,
+                    "content": content,
+                    "title": page_path.stem,
+                },
+            }],
+        )
+        logger.info(f"Successfully indexed {page_path.name}")
+
+    async def index_all_wiki_pages_async(self) -> int:
+        """Index all markdown files in the wiki directory with concurrency limiting."""
+        indexed = 0
+        semaphore = asyncio.Semaphore(5)  # Limit concurrency to 5
+
+        async def index_with_semaphore(page: Path) -> bool:
+            """Index a page with semaphore control."""
+            async with semaphore:
+                try:
+                    await self.index_page_async(page)
+                    return True
+                except Exception as e:
+                    logger.error(f"Failed to index {page}: {e}")
+                    return False
+
+        tasks = []
+        for md_file in self.wiki_dir.rglob("*.md"):
+            tasks.append(index_with_semaphore(md_file))
+
+        results = await asyncio.gather(*tasks)
+        indexed = sum(results)
+        logger.info(f"Indexed {indexed} wiki pages")
+        return indexed
+
+    async def search_async(self, query: str, top_k: int = 5) -> list[dict]:
+        """Asynchronously search for relevant wiki pages."""
+        logger.info(f"Async searching wiki for: {query[:50]}... (top_k={top_k})")
+        query_embedding = await self._get_embedding_async(query)
+
+        results = await self.client.search_async(
+            collection_name=self.COLLECTION_NAME,
+            query_vector=query_embedding,
+            limit=top_k
+        )
+
+        result_dicts = [
+            {
+                "path": hit.payload["path"],
+                "content": hit.payload["content"],
+                "score": hit.score,
+            }
+            for hit in results
+        ]
+        logger.info(f"Async search returned {len(result_dicts)} results")
         return result_dicts

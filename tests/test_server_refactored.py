@@ -19,6 +19,15 @@ class MockLLMProvider(LLMProvider):
     def generate_stream(self, prompt: str):
         yield self.response
 
+    def health_check(self) -> bool:
+        return True
+
+    async def generate_async(self, prompt: str) -> str:
+        return self.response
+
+    async def generate_stream_async(self, prompt: str):
+        yield self.response
+
 
 class MockVectorStore(VectorStore):
     def upsert(self, collection_name: str, points: list[dict]) -> bool:
@@ -31,6 +40,23 @@ class MockVectorStore(VectorStore):
         limit: int = 5
     ) -> list[SearchPoint]:
         return []
+
+    async def search_async(
+        self,
+        collection_name: str,
+        query_vector: list[float],
+        limit: int = 5
+    ) -> list[SearchPoint]:
+        return []
+
+    async def upsert_async(self, collection_name: str, points: list[dict]) -> bool:
+        return True
+
+    def health_check(self) -> bool:
+        return True
+
+    def get_collection_info(self) -> dict:
+        return {"collections": []}
 
 
 def test_create_app_accepts_services():

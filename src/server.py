@@ -112,6 +112,14 @@ def create_app(
             media_type="text/event-stream",
         )
 
+    @app.post("/chat/async")
+    async def chat_async(request: ChatRequest) -> StreamingResponse:
+        logger.info(f"Async chat request received: {request.message[:50]}...")
+        return StreamingResponse(
+            stream_chat_response_async(request.message, chat_engine),
+            media_type="text/event-stream",
+        )
+
     @app.get("/")
     async def serve_index():
         from fastapi.responses import FileResponse
@@ -168,6 +176,51 @@ Answer based on the context above. If the context doesn't contain relevant infor
             yield f"data: {json.dumps({'text': response_text})}\n\n"
 
     logger.info(f"Streamed {chunk_count} chunks, sending [DONE]")
+    yield "data: [DONE]\n\n"
+
+
+async def stream_chat_response_async(
+    message: str,
+    chat_engine,
+) -> AsyncGenerator[str, None]:
+    """Stream chat response as SSE events using async methods."""
+    import html
+
+    logger.debug(f"Async searching wiki for: {message[:50]}...")
+    start_time = time.time()
+    context_pages = await chat_engine.search_async(message)
+    search_duration = time.time() - start_time
+
+    logger.info(
+        f"Async search completed in {search_duration:.3f}s, found {len(context_pages)} pages"
+    )
+
+    context_text = "\n\n".join(
+        f"=== {p['path']} ===\n{p['content']}" for p in context_pages
+    )
+
+    # Sanitize user input to prevent prompt injection attacks
+    sanitized_message = html.escape(message.strip())
+
+    prompt = f"""You are a helpful assistant answering questions based on a personal knowledge wiki.
+
+Context from wiki:
+{context_text}
+
+Question: {sanitized_message}
+
+Answer based on the context above. If the context doesn't contain relevant information, say so."""
+
+    logger.debug(f"Sending prompt to LLM ({len(prompt)} chars)")
+    stream = chat_engine.llm_provider.generate_stream_async(prompt)
+
+    chunk_count = 0
+    async for response_text in stream:
+        if response_text:
+            chunk_count += 1
+            yield f"data: {json.dumps({'text': response_text})}\n\n"
+
+    logger.info(f"Async streamed {chunk_count} chunks, sending [DONE]")
     yield "data: [DONE]\n\n"
 
 
