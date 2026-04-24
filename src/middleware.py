@@ -1,4 +1,5 @@
 """Rate limiting middleware for the Personal Wiki Chat application."""
+import asyncio
 import time
 from collections import defaultdict
 from typing import Dict, List
@@ -6,6 +7,9 @@ from typing import Dict, List
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.responses import JSONResponse
+
+RATE_LIMIT_EXCEEDED_MSG = "Rate limit exceeded"
+_CLEANUP_THRESHOLD = 1000
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
@@ -22,6 +26,24 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self.window_seconds = window_seconds
         # Track requests: {ip: [timestamp1, timestamp2, ...]}
         self._request_history: Dict[str, List[float]] = defaultdict(list)
+        self._lock = asyncio.Lock()
+        self._request_count = 0
+
+    def _cleanup(self) -> None:
+        """Remove IPs with no recent entries to prevent unbounded memory growth."""
+        stale_keys = [
+            ip for ip, timestamps in self._request_history.items()
+            if not timestamps
+        ]
+        for ip in stale_keys:
+            del self._request_history[ip]
+
+    def _maybe_cleanup(self) -> None:
+        """Trigger cleanup periodically to prevent memory leaks."""
+        self._request_count += 1
+        if self._request_count >= _CLEANUP_THRESHOLD or len(self._request_history) > _CLEANUP_THRESHOLD:
+            self._cleanup()
+            self._request_count = 0
 
     def _get_client_ip(self, request: Request) -> str:
         """Extract client IP from request.
@@ -90,13 +112,18 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         """
         client_ip = self._get_client_ip(request)
 
-        if self._is_rate_limited(client_ip):
+        async with self._lock:
+            self._maybe_cleanup()
+            rate_limited = self._is_rate_limited(client_ip)
+
+        if rate_limited:
             return JSONResponse(
                 status_code=429,
                 content={
-                    "error": "Rate limit exceeded",
+                    "error": RATE_LIMIT_EXCEEDED_MSG,
                     "detail": f"Maximum {self.max_requests} requests per {self.window_seconds} seconds"
-                }
+                },
+                headers={"Retry-After": str(self.window_seconds)},
             )
 
         # Not rate limited, proceed with request
