@@ -56,6 +56,7 @@ def create_app(
     """
     from src.indexer import WikiIndexer
     from src.chat import ChatEngine
+    from src.routes.manage import router as manage_router
 
     app = FastAPI(title="Personal Wiki Chat")
     logger.info("Creating FastAPI application")
@@ -82,6 +83,9 @@ def create_app(
     # Use injected services or create defaults
     if vector_store is None:
         vector_store = QdrantStore(url=qdrant_url)
+
+    # Register source management routes
+    app.include_router(manage_router)
 
     indexer = WikiIndexer(wiki_dir, vector_store=vector_store)
     chat_engine = ChatEngine(wiki_dir, indexer, llm_provider=llm_provider)
