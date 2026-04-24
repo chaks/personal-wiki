@@ -384,7 +384,7 @@
 
             previewPanel.innerHTML = `
                 <h2>${escapeHtml(displayName)}</h2>
-                <div class="preview-meta">${escape(typeLabel)}</div>
+                <div class="preview-meta">${escapeHtml(typeLabel)}</div>
                 <div class="preview-body">${escapeHtml(content)}</div>
             `;
         }
@@ -401,12 +401,6 @@
 
         // HTML escape
         function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
-
-        function escape(text) {
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;

@@ -56,7 +56,7 @@ class APIKeyAuthMiddleware(BaseHTTPMiddleware):
         """
         super().__init__(app)
         self.api_keys = api_keys
-        self.exclude_paths = exclude_paths or {"/health", "/docs", "/openapi.json"}
+        self.exclude_paths = exclude_paths or {"/health", "/docs", "/openapi.json", "/", "/manage", "/browse"}
 
     async def dispatch(self, request: Request, call_next) -> Response:
         """Process the request and check API key authentication.

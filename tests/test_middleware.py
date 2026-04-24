@@ -2,8 +2,15 @@
 import pytest
 from pathlib import Path
 from fastapi.testclient import TestClient
+from starlette.applications import Starlette
+from starlette.responses import JSONResponse
+from starlette.routing import Route
 
 from src.middleware import RateLimitMiddleware
+
+
+async def health_endpoint(request):
+    return JSONResponse({"status": "ok"})
 
 
 @pytest.fixture
@@ -34,9 +41,6 @@ class TestRateLimitMiddleware:
             api_keys=None,  # No auth to focus on rate limiting
         )
 
-        # Add rate limiting middleware
-        app.add_middleware(RateLimitMiddleware, max_requests=10, window_seconds=60)
-
         with TestClient(app) as client:
             # 10 requests should succeed (within limit)
             for i in range(10):
@@ -58,9 +62,6 @@ class TestRateLimitMiddleware:
             api_keys=None,
         )
 
-        # Add rate limiting middleware
-        app.add_middleware(RateLimitMiddleware, max_requests=10, window_seconds=60)
-
         with TestClient(app) as client:
             # First 10 requests should succeed
             for i in range(10):
@@ -71,23 +72,11 @@ class TestRateLimitMiddleware:
             response = client.get("/health")
             assert response.status_code == 429, "11th request should be rate limited"
 
-    def test_rate_limit_by_ip(self, test_dirs):
+    def test_rate_limit_by_ip(self):
         """Different IPs have independent rate limits."""
-        from src.server import create_app
-
-        test_dirs["static"].mkdir(parents=True)
-        (test_dirs["static"] / "index.html").write_text("<html>Test</html>")
-
-        # Create app with rate limiting: 5 requests per 60 seconds (smaller for easier testing)
-        app = create_app(
-            test_dirs["wiki"],
-            test_dirs["state"],
-            test_dirs["static"],
-            api_keys=None,
-        )
-
-        # Add rate limiting middleware
-        app.add_middleware(RateLimitMiddleware, max_requests=5, window_seconds=60)
+        # Test middleware directly with custom rate limit
+        inner_app = Starlette(routes=[Route("/health", health_endpoint)])
+        app = RateLimitMiddleware(inner_app, max_requests=5, window_seconds=60)
 
         with TestClient(app) as client:
             # Simulate requests from IP 1 (5 requests - at limit)
@@ -118,9 +107,6 @@ class TestRateLimitMiddleware:
             test_dirs["static"],
             api_keys=None,
         )
-
-        # Add rate limiting middleware
-        app.add_middleware(RateLimitMiddleware, max_requests=10, window_seconds=60)
 
         # Verify middleware is in the app's middleware stack
         # Check that RateLimitMiddleware is registered by iterating through user_middleware

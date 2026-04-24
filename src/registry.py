@@ -251,19 +251,3 @@ def list_concepts(wiki_dir: Path) -> list[str]:
     """
     return _list_pages(wiki_dir, "concepts")
 
-
-def find_orphaned_pages(wiki_dir: Path) -> list[str]:
-    """Find orphaned pages in the wiki (pages with no incoming links).
-
-    Args:
-        wiki_dir: Root wiki directory
-
-    Returns:
-        List of orphan page paths relative to wiki_dir
-    """
-    from src.lint import WikiLinter
-
-    linter = WikiLinter(wiki_dir)
-    orphans = linter.check_orphans()
-    return [str(orph.relative_to(wiki_dir)) for orph in orphans]
-
