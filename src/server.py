@@ -8,7 +8,7 @@ from typing import AsyncGenerator, Optional, Set
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -139,7 +139,6 @@ def create_app(
 
     @app.get("/manage")
     async def serve_manage():
-        from fastapi.responses import FileResponse
         manage_path = static_dir / "manage.html"
         if not manage_path.exists():
             logger.error(f"manage.html not found at {manage_path}")

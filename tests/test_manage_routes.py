@@ -141,3 +141,49 @@ async def test_manage_routes_registered(test_dirs):
 
     route_paths = [route.path for route in app.routes]
     assert "/api/sources" in route_paths
+
+
+@pytest.mark.asyncio
+async def test_add_source_validates_url(test_dirs):
+    """POST /api/sources rejects invalid URLs."""
+    test_dirs["config"].mkdir(parents=True)
+    sources_file = test_dirs["config"] / "sources.yaml"
+
+    import src.routes.manage as manage_module
+
+    original = manage_module.SOURCES_FILE
+    manage_module.SOURCES_FILE = str(sources_file)
+
+    try:
+        from src.server import create_app
+
+        test_dirs["static"].mkdir(parents=True)
+        (test_dirs["static"] / "index.html").write_text("<html>Test</html>")
+
+        app = create_app(test_dirs["wiki"], test_dirs["state"], test_dirs["static"])
+
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            # Invalid URL should be rejected
+            response = await client.post(
+                "/api/sources",
+                json={"type": "url", "url": "not-a-valid-url", "tags": ["web"]},
+            )
+            assert response.status_code == 400
+            data = response.json()
+            assert "Invalid URL" in data["detail"]
+
+            # Missing scheme should be rejected
+            response = await client.post(
+                "/api/sources",
+                json={"type": "url", "url": "ftp://example.com", "tags": ["web"]},
+            )
+            assert response.status_code == 400
+
+            # Valid URL should be accepted
+            response = await client.post(
+                "/api/sources",
+                json={"type": "url", "url": "https://example.com/article", "tags": ["web"]},
+            )
+            assert response.status_code == 201
+    finally:
+        manage_module.SOURCES_FILE = original

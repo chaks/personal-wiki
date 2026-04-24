@@ -1,4 +1,5 @@
 """Source management API routes."""
+import re
 import yaml
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -26,6 +27,25 @@ def _validate_path(path: str) -> None:
         raise HTTPException(status_code=400, detail="Path must not contain '..'")
     if path.startswith("/"):
         raise HTTPException(status_code=400, detail="Path must not be absolute (must not start with '/')")
+
+
+# Basic URL validation: must have scheme (http/https) and a domain-like structure
+_URL_PATTERN = re.compile(
+    r'^https?://'  # scheme
+    r'(?:(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+[A-Z]{2,6}\.?|'  # domain
+    r'localhost|'  # localhost
+    r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})'  # or IP
+    r'(?::\d+)?'  # optional port
+    r'(?:/?|[/?]\S+)$', re.IGNORECASE)
+
+
+def _validate_url(url: str) -> None:
+    """Validate that a URL is well-formed."""
+    if not _URL_PATTERN.match(url):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid URL format. URL must start with http:// or https:// and include a valid domain or IP address."
+        )
 
 
 def _resolve_sources_file() -> str:
@@ -76,6 +96,7 @@ async def add_source(source: SourceInput):
         _validate_path(source.path)
         source_dict["path"] = source.path
     if source.url:
+        _validate_url(source.url)
         source_dict["url"] = source.url
     if source.language:
         source_dict["language"] = source.language
