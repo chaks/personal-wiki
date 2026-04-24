@@ -1,4 +1,3 @@
-# Source management API routes
 """Source management API routes."""
 import yaml
 from fastapi import APIRouter, HTTPException
@@ -18,6 +17,14 @@ class SourceInput(BaseModel):
     url: Optional[str] = Field(None, description="URL for web sources")
     language: Optional[str] = Field(None, description="Language for code sources")
     tags: List[str] = Field(default_factory=list, description="Tags for the source")
+
+
+def _validate_path(path: str) -> None:
+    """Validate that a path does not contain traversal attempts."""
+    if ".." in path:
+        raise HTTPException(status_code=400, detail="Path must not contain '..'")
+    if path.startswith("/"):
+        raise HTTPException(status_code=400, detail="Path must not be absolute (must not start with '/')")
 
 
 def _resolve_sources_file() -> str:
@@ -65,6 +72,7 @@ async def add_source(source: SourceInput):
     source_dict = {"type": source.type, "tags": source.tags}
 
     if source.path:
+        _validate_path(source.path)
         source_dict["path"] = source.path
     if source.url:
         source_dict["url"] = source.url
@@ -101,6 +109,7 @@ async def add_source(source: SourceInput):
 @router.delete("/path/{path:path}")
 async def delete_source(path: str):
     """Delete a source by its path."""
+    _validate_path(path)
     sources_file = _resolve_sources_file()
 
     try:
