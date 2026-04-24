@@ -3,8 +3,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Optional
 
-from src.services.llm_provider import LLMProvider, OllamaProvider
-from src.services.vector_store import VectorStore, QdrantStore
+from src.services.llm_provider import LLMProvider
+from src.services.vector_store import VectorStore
 
 
 class ServiceStatus(str, Enum):
