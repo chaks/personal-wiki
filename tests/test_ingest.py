@@ -6,17 +6,6 @@ markdown `full_pipeline` flag which routes markdown sources through either
 the DoclingIngestor (full pipeline) or simple copy+index path.
 """
 import pytest
-from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
-import importlib.util
-
-
-# Load ingest.py as a module (avoids package-level import issues)
-_spec = importlib.util.spec_from_file_location(
-    "ingest_module",
-    Path(__file__).parent.parent / "src" / "ingest.py"
-)
-_ingest_module = importlib.util.module_from_spec(_spec)
 
 
 @pytest.fixture
@@ -25,17 +14,6 @@ def temp_source_file(tmp_path):
     source_file = tmp_path / "notes.md"
     source_file.write_text("# Test Notes\n\nThis is test content for the notes.")
     return source_file
-
-
-@pytest.fixture
-def temp_wiki_dir(tmp_path):
-    """Create a temporary wiki directory with required subdirs."""
-    wiki_dir = tmp_path / "wiki"
-    wiki_dir.mkdir()
-    (wiki_dir / "generated").mkdir()
-    (wiki_dir / "entities").mkdir()
-    (wiki_dir / "concepts").mkdir()
-    return wiki_dir
 
 
 @pytest.fixture
@@ -140,7 +118,7 @@ class TestMarkdownFullPipelineIntegration:
     """Integration-style tests for the full_pipeline routing."""
 
     def test_full_pipeline_true_routes_to_docling_ingestor(
-        self, temp_source_file, temp_wiki_dir, temp_config_dir
+        self, temp_source_file, temp_config_dir
     ):
         """When full_pipeline=True, the config correctly indicates DoclingIngestor should be used."""
         # Create a sources.yaml config with full_pipeline=True
@@ -165,7 +143,7 @@ class TestMarkdownFullPipelineIntegration:
         assert source.get("full_pipeline", False) is True
 
     def test_full_pipeline_false_routes_to_copy_path(
-        self, temp_source_file, temp_wiki_dir, temp_config_dir
+        self, temp_source_file, temp_config_dir
     ):
         """When full_pipeline=False, the config correctly indicates copy+index path."""
         config_path = temp_config_dir / "sources.yaml"
@@ -185,7 +163,7 @@ class TestMarkdownFullPipelineIntegration:
         assert source.get("full_pipeline", False) is False
 
     def test_full_pipeline_missing_routes_to_copy_path(
-        self, temp_source_file, temp_wiki_dir, temp_config_dir
+        self, temp_source_file, temp_config_dir
     ):
         """When full_pipeline is missing, the config correctly indicates copy+index path."""
         config_path = temp_config_dir / "sources.yaml"
@@ -205,7 +183,7 @@ class TestMarkdownFullPipelineIntegration:
         assert source.get("full_pipeline", False) is False
 
     def test_mixed_sources_config(
-        self, temp_source_file, temp_wiki_dir, temp_config_dir
+        self, temp_source_file, temp_config_dir
     ):
         """Config can have mixed markdown sources with different full_pipeline values."""
         pdf_file = temp_config_dir.parent / "doc.pdf"
