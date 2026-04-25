@@ -134,10 +134,12 @@ class QdrantStore(VectorStore):
     ) -> list[SearchPoint]:
         """Search for similar points in Qdrant."""
         logger.debug(f"Searching {collection_name} with limit={limit}")
-        results = self.client.search(
+        result = self.client.query_points(
             collection_name=collection_name,
-            query_vector=query_vector,
-            limit=limit
+            query=query_vector,
+            limit=limit,
+            with_payload=True,
+            with_vectors=False,
         )
         return [
             SearchPoint(
@@ -146,7 +148,7 @@ class QdrantStore(VectorStore):
                 payload=r.payload or {},
                 vector=r.vector if hasattr(r, "vector") else None
             )
-            for r in results
+            for r in result.points
         ]
 
     def health_check(self) -> bool:
@@ -184,10 +186,12 @@ class QdrantStore(VectorStore):
     ) -> list[SearchPoint]:
         """Asynchronously search for similar points in Qdrant."""
         logger.debug(f"Async searching {collection_name} with limit={limit}")
-        results = await self.client.search(
+        result = await self.client.query_points(
             collection_name=collection_name,
-            query_vector=query_vector,
-            limit=limit
+            query=query_vector,
+            limit=limit,
+            with_payload=True,
+            with_vectors=False,
         )
         return [
             SearchPoint(
@@ -196,7 +200,7 @@ class QdrantStore(VectorStore):
                 payload=r.payload or {},
                 vector=r.vector if hasattr(r, "vector") else None
             )
-            for r in results
+            for r in result.points
         ]
 
     async def upsert_async(self, collection_name: str, points: list[dict]) -> bool:
