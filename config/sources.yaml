@@ -12,10 +12,16 @@ sources:
   #   url: https://example.com/article
   #   tags: []
 
-  # Example local markdown:
+  # Example local markdown (simple copy + index):
   # - type: markdown
   #   path: sources/markdown/notes.md
   #   tags: []
+
+  # Example local markdown with full pipeline (entity/concept extraction):
+  # - type: markdown
+  #   path: sources/markdown/essay-on-distributed-systems.md
+  #   full_pipeline: true
+  #   tags: [distributed-systems]
 
   # Example code repository:
   # - type: code
