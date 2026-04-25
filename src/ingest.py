@@ -103,19 +103,52 @@ def main():
                 logger.warning(f"Markdown not found: {source_path}")
                 skipped += 1
                 continue
-            # Markdown files are already in wiki format, just copy
-            output_path = wiki_dir / source_path.relative_to(source_path.parent.parent)
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-            output_path.write_text(source_path.read_text())
-            print(f"  [COPY] {source_path.name} -> {output_path}")
-            logger.info(f"Copied markdown: {source_path.name} -> {output_path}")
 
-            # Index the copied markdown file
-            from src.indexer import WikiIndexer
-            indexer = WikiIndexer(wiki_dir)
-            indexer.index_page(output_path)
-            logger.info(f"Indexed {output_path} in Qdrant")
-            processed += 1
+            use_full_pipeline = source.get("full_pipeline", False) or False
+
+            if use_full_pipeline:
+                content_hash = registry.compute_hash(source_path)
+                if not registry.has_source_changed(source_id, content_hash):
+                    print(f"  [SKIP] {source_path.name} (unchanged)")
+                    logger.debug(f"Source unchanged: {source_path.name}")
+                    skipped += 1
+                    continue
+
+                print(f"  [INGEST] {source_path.name} (full pipeline)...")
+                logger.info(f"Ingesting markdown with full pipeline: {source_path.name}")
+                ingestor = DoclingIngestor(source_path, wiki_dir / "generated", wiki_dir=wiki_dir)
+                result = ingestor.ingest()
+
+                if result.success:
+                    print(f"    -> {result.output_path}")
+                    logger.info(f"Ingested {source_path.name} -> {result.output_path}")
+                    registry.add_source(
+                        source_id=source_id,
+                        source_type=source_type,
+                        path=str(source_path),
+                        content_hash=content_hash,
+                        tags=tags,
+                    )
+                    registry.link_wiki_page(source_id, str(result.output_path))
+                    registry.update_status(source_id, SourceStatus.PROCESSED)
+                    processed += 1
+                else:
+                    print(f"    ERROR: {result.error}")
+                    logger.error(f"Markdown ingestion failed: {result.error}")
+                    registry.update_status(source_id, SourceStatus.FAILED, result.error)
+                    failed += 1
+            else:
+                output_path = wiki_dir / source_path.relative_to(source_path.parent.parent)
+                output_path.parent.mkdir(parents=True, exist_ok=True)
+                output_path.write_text(source_path.read_text())
+                print(f"  [COPY] {source_path.name} -> {output_path}")
+                logger.info(f"Copied markdown: {source_path.name} -> {output_path}")
+
+                from src.indexer import WikiIndexer
+                indexer = WikiIndexer(wiki_dir)
+                indexer.index_page(output_path)
+                logger.info(f"Indexed {output_path} in Qdrant")
+                processed += 1
 
         elif source_type == "url":
             from src.ingestion.url_ingestor import URLIngestor
