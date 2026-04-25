@@ -1,6 +1,7 @@
 # Deployment Guide
 
-Comprehensive guide for deploying the Personal Wiki Chat application in local development, production, and cloud environments.
+Comprehensive guide for deploying the Personal Wiki Chat application in local development, production, and cloud
+environments.
 
 ## Table of Contents
 
@@ -18,12 +19,13 @@ Comprehensive guide for deploying the Personal Wiki Chat application in local de
 
 ## Prerequisites
 
-| Requirement | Minimum Version | Purpose |
-|---|---|---|
-| Python | 3.12+ | Application runtime |
-| Docker | Latest | Qdrant container |
-| Ollama | Latest | Local LLM (generation + embeddings) |
-| Git | Latest | Source control |
+| Requirement | Minimum Version | Purpose                             |
+|-------------|-----------------|-------------------------------------|
+| Python      | 3.12+           | Application runtime                 |
+| Docker      | Latest          | Qdrant container                    |
+| Ollama      | Latest          | Local LLM (generation + embeddings) |
+| Git         | Latest          | Source control                      |
+| make        | Standard        | Build automation (recommended)      |
 
 Verify prerequisites:
 
@@ -32,6 +34,7 @@ python --version        # Python 3.12+
 docker --version
 ollama --version
 git --version
+make --version
 ```
 
 ---
@@ -50,6 +53,12 @@ cd personal-wiki
 2. **Create a virtual environment and install dependencies**
 
 ```bash
+make setup
+```
+
+Or manually:
+
+```bash
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
@@ -58,6 +67,8 @@ pip install -r requirements.txt
 3. **Pull Ollama models**
 
 ```bash
+make ollama-pull
+# or
 ollama pull gemma4:e2b       # Entity/concept extraction + LLM generation
 ollama pull nomic-embed-text  # Semantic embeddings
 ```
@@ -65,11 +76,13 @@ ollama pull nomic-embed-text  # Semantic embeddings
 4. **Start Qdrant**
 
 ```bash
+make qdrant-start
+# or
 docker run -d \
   --name qdrant \
   -p 6333:6333 \
   -v qdrant_storage:/qdrant/storage \
-  qdrant/qdrant
+  qdrant/qdrant:latest
 ```
 
 5. **Configure your sources**
@@ -90,40 +103,84 @@ sources:
     path: sources/notes/meeting.md
     tags: [meetings]
 
+  - type: markdown
+    path: sources/markdown/essay-on-distributed-systems.md
+    full_pipeline: true        # Run LLM entity/concept extraction (not just copy+index)
+    tags: [distributed-systems]
+
   - type: code
     path: sources/code/my-project
     language: python
     tags: [codebase]
 ```
 
+### Source Types
+
+| Type                               | Description                                   | LLM Extraction         |
+|------------------------------------|-----------------------------------------------|------------------------|
+| `pdf`                              | PDF documents via Docling                     | Yes                    |
+| `url`                              | Web pages via Docling                         | Yes                    |
+| `markdown` (default)               | Local markdown files                          | No (copy + index only) |
+| `markdown` (`full_pipeline: true`) | Local markdown files with full LLM processing | Yes                    |
+| `code`                             | Code repositories                             | Yes                    |
+
 6. **Run ingestion**
 
 ```bash
+make ingest
+# or
 python -m src.ingest
 ```
 
-This converts documents to markdown, extracts entities and concepts, creates wiki pages, and indexes everything in Qdrant.
+This converts documents to markdown, extracts entities and concepts, creates wiki pages, and indexes everything in
+Qdrant.
 
 7. **Start the server**
 
 ```bash
+make run
+# or with debug logging:
+make run-dev
+# or manually:
 python -m src --host 0.0.0.0 --port 8000
 ```
 
-Or with debug logging:
+8. **Open the UI**
 
-```bash
-python -m src --host 0.0.0.0 --port 8000 --log-level DEBUG
-```
-
-8. **Open the chat UI**
-
-Navigate to [http://localhost:8000](http://localhost:8000).
+| Page   | URL                          | Description                       |
+|--------|------------------------------|-----------------------------------|
+| Chat   | http://localhost:8000        | Ask questions against your wiki   |
+| Manage | http://localhost:8000/manage | Add, edit, enable/disable sources |
+| Browse | http://localhost:8000/browse | Browse and explore wiki pages     |
 
 ### Optional: Run wiki lint checks
 
 ```bash
+make lint-wiki
+# or
 python -m src --lint
+```
+
+### Source Management via API
+
+Manage sources programmatically via REST API:
+
+```bash
+# List sources
+curl http://localhost:8000/api/sources
+
+# Add a source
+curl -X POST http://localhost:8000/api/sources \
+  -H "Content-Type: application/json" \
+  -d '{"type": "url", "url": "https://example.com/article", "tags": ["reference"]}'
+
+# Update a source
+curl -X PUT http://localhost:8000/api/sources/{id} \
+  -H "Content-Type: application/json" \
+  -d '{"tags": ["updated-tag"]}'
+
+# Delete a source
+curl -X DELETE http://localhost:8000/api/sources/{id}
 ```
 
 ---
@@ -235,19 +292,23 @@ docker compose exec app python -m src.ingest
 - **Reverse proxy**: Place nginx or Traefik in front of the app for TLS termination.
 - **Resource limits**: Add `deploy.resources` to `docker-compose.yml` to cap memory/CPU.
 - **Persistent volumes**: Ensure `qdrant_storage`, `ollama_storage`, and mounted directories are backed up.
+- **Enable authentication**: Set `WIKI_API_KEYS` to require API key authentication for all requests (except `/health`,
+  `/docs`, `/openapi.json`).
+- **Rate limiting**: Built-in rate limiting is enabled by default (10 requests per 60 seconds per IP). Adjust in
+  `src/server.py` if needed.
 
 ---
 
 ## Environment Variables
 
-| Variable | Default | Description |
-|---|---|---|
-| `QDRANT_URL` | `http://localhost:6333` | Qdrant server URL |
-| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server URL |
-| `WIKI_API_KEYS` | *(none)* | Comma-separated API keys for authentication. When set, all requests require the `X-API-Key` header (except `/health`, `/docs`, `/openapi.json`). Generate with: `python -c "from src.auth import generate_api_key; print(generate_api_key())"` |
-| `WIKI_DIR` | `./wiki` | Path to wiki content directory |
-| `STATE_DIR` | `./state` | Path to state directory |
-| `LOG_LEVEL` | `INFO` | Logging level (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
+| Variable          | Default                  | Description                                                                                                                                                                                                                                    |
+|-------------------|--------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `QDRANT_URL`      | `http://localhost:6333`  | Qdrant server URL                                                                                                                                                                                                                              |
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server URL                                                                                                                                                                                                                              |
+| `WIKI_API_KEYS`   | *(none)*                 | Comma-separated API keys for authentication. When set, all requests require the `X-API-Key` header (except `/health`, `/docs`, `/openapi.json`). Generate with: `python -c "from src.auth import generate_api_key; print(generate_api_key())"` |
+| `WIKI_DIR`        | `./wiki`                 | Path to wiki content directory                                                                                                                                                                                                                 |
+| `STATE_DIR`       | `./state`                | Path to state directory (chat history, registry, change-tracking)                                                                                                                                                                              |
+| `LOG_LEVEL`       | `INFO`                   | Logging level (`DEBUG`, `INFO`, `WARNING`, `ERROR`)                                                                                                                                                                                            |
 
 ---
 
@@ -289,15 +350,19 @@ services:
       - ollama
 ```
 
-Deploy with ECS CLI or convert to CloudFormation/Terraform. Use ElastiCache (Redis) if you later need a managed cache layer.
+Deploy with ECS CLI or convert to CloudFormation/Terraform. Use ElastiCache (Redis) if you later need a managed cache
+layer.
 
 **Option 2: EC2**
 
-Launch a t3.medium (or larger) instance with an Amazon Linux 2 AMI. Install Docker and Docker Compose, copy project files, and run `docker compose up -d`. Use a security group to allow ports 80 and 443 from the internet, and port 22 for SSH only.
+Launch a t3.medium (or larger) instance with an Amazon Linux 2 AMI. Install Docker and Docker Compose, copy project
+files, and run `docker compose up -d`. Use a security group to allow ports 80 and 443 from the internet, and port 22 for
+SSH only.
 
 **Option 3: App Runner**
 
-Build and push the Docker image to ECR, then create an App Runner service. Note: Ollama requires GPU or significant CPU for reasonable response times; consider running Ollama on a separate EC2 instance or using a cloud LLM API instead.
+Build and push the Docker image to ECR, then create an App Runner service. Note: Ollama requires GPU or significant CPU
+for reasonable response times; consider running Ollama on a separate EC2 instance or using a cloud LLM API instead.
 
 ### GCP
 
@@ -316,11 +381,13 @@ gcloud run deploy personal-wiki \
   --cpu 2
 ```
 
-For Ollama, use a separate Cloud Run service with GPU acceleration, or run it on a Compute Engine instance. Point `OLLAMA_BASE_URL` to the Ollama service URL.
+For Ollama, use a separate Cloud Run service with GPU acceleration, or run it on a Compute Engine instance. Point
+`OLLAMA_BASE_URL` to the Ollama service URL.
 
 **GKE**
 
-For Kubernetes-based deployment, create a `k8s/` directory with Deployments and Services for each component (Qdrant, Ollama, app), plus PersistentVolumeClaims for data.
+For Kubernetes-based deployment, create a `k8s/` directory with Deployments and Services for each component (Qdrant,
+Ollama, app), plus PersistentVolumeClaims for data.
 
 ### Azure
 
@@ -337,7 +404,8 @@ az container create \
   --memory 4
 ```
 
-Use Azure Container Registry (ACR) to store images. For Qdrant, use Azure Container Instances with a volume mount to Azure Files. For Ollama, use a VM or AKS node with GPU support.
+Use Azure Container Registry (ACR) to store images. For Qdrant, use Azure Container Instances with a volume mount to
+Azure Files. For Ollama, use a VM or AKS node with GPU support.
 
 ---
 
@@ -351,7 +419,8 @@ Enable authentication by setting `WIKI_API_KEYS`:
 export WIKI_API_KEYS="$(python -c 'from src.auth import generate_api_key; print(generate_api_key())'),$(python -c 'from src.auth import generate_api_key; print(generate_api_key())')"
 ```
 
-The middleware checks the `X-API-Key` header on all requests except `/health`, `/docs`, and `/openapi.json`. Generate keys with:
+The middleware checks the `X-API-Key` header on all requests except `/health`, `/docs`, and `/openapi.json`. Generate
+keys with:
 
 ```python
 from src.auth import generate_api_key
@@ -360,7 +429,8 @@ print(generate_api_key())  # 64-character hex string
 
 ### CORS Configuration
 
-The default CORS policy restricts origins to `localhost:3000` and `localhost:8000`. For production, update `src/server.py` to allow only your domain:
+The default CORS policy restricts origins to `localhost:3000` and `localhost:8000`. For production, update
+`src/server.py` to allow only your domain:
 
 ```python
 app.add_middleware(
@@ -374,7 +444,8 @@ app.add_middleware(
 
 ### Rate Limiting
 
-Built-in rate limiting is enabled by default at 10 requests per 60 seconds per IP. This is configured in `src/server.py` via `RateLimitMiddleware`. Adjust the values if needed:
+Built-in rate limiting is enabled by default at 10 requests per 60 seconds per IP. This is configured in `src/server.py`
+via `RateLimitMiddleware`. Adjust the values if needed:
 
 ```python
 app.add_middleware(RateLimitMiddleware, max_requests=10, window_seconds=60)
@@ -384,7 +455,8 @@ The middleware respects `X-Forwarded-For` headers when behind a reverse proxy.
 
 ### HTTPS / TLS
 
-Never expose the application directly to the internet. Always use a reverse proxy (nginx, Traefik, or cloud load balancer) for TLS termination:
+Never expose the application directly to the internet. Always use a reverse proxy (nginx, Traefik, or cloud load
+balancer) for TLS termination:
 
 **nginx example:**
 
@@ -443,7 +515,8 @@ Use this endpoint for:
 
 ### Logging
 
-Logs are written to both `logs/personal-wiki.log` (rotating, 10MB max) and stdout. Configure the level via `--log-level` or the `LOG_LEVEL` environment variable.
+Logs are written to both `logs/personal-wiki.log` (rotating, 10MB max) and stdout. Configure the level via `--log-level`
+or the `LOG_LEVEL` environment variable.
 
 Key log messages to monitor:
 
@@ -456,15 +529,16 @@ Key log messages to monitor:
 
 For production observability, track:
 
-| Metric | Source | Alert Threshold |
-|---|---|---|
-| Response time (p95) | `/chat` endpoint logs | > 30s |
-| Search latency | Search duration logs | > 5s |
-| Error rate | Log analysis of ERROR/WARNING | > 1% of requests |
-| Qdrant availability | `/health` endpoint | Any unhealthy |
-| Ollama availability | `/health` endpoint | Any unhealthy |
+| Metric              | Source                        | Alert Threshold  |
+|---------------------|-------------------------------|------------------|
+| Response time (p95) | `/chat` endpoint logs         | > 30s            |
+| Search latency      | Search duration logs          | > 5s             |
+| Error rate          | Log analysis of ERROR/WARNING | > 1% of requests |
+| Qdrant availability | `/health` endpoint            | Any unhealthy    |
+| Ollama availability | `/health` endpoint            | Any unhealthy    |
 
-Consider integrating Prometheus and Grafana, or a cloud-native monitoring solution (CloudWatch, Stackdriver, Application Insights).
+Consider integrating Prometheus and Grafana, or a cloud-native monitoring solution (CloudWatch, Stackdriver, Application
+Insights).
 
 ---
 
@@ -472,14 +546,14 @@ Consider integrating Prometheus and Grafana, or a cloud-native monitoring soluti
 
 ### What to Back Up
 
-| Component | Path / Data | Backup Method |
-|---|---|---|
-| Qdrant vectors | `/qdrant/storage` (Docker volume) | `qdrant snapshot` API |
-| Wiki content | `wiki/` directory | File copy / rsync |
-| State (registry, history) | `state/` directory | File copy / rsync |
-| Sources | `sources/` directory | File copy / rsync |
-| Configuration | `config/` directory | File copy / rsync |
-| Ollama models | `/root/.ollama` (Docker volume) | Recreate via `ollama pull` |
+| Component                 | Path / Data                       | Backup Method              |
+|---------------------------|-----------------------------------|----------------------------|
+| Qdrant vectors            | `/qdrant/storage` (Docker volume) | `qdrant snapshot` API      |
+| Wiki content              | `wiki/` directory                 | File copy / rsync          |
+| State (registry, history) | `state/` directory                | File copy / rsync          |
+| Sources                   | `sources/` directory              | File copy / rsync          |
+| Configuration             | `config/` directory               | File copy / rsync          |
+| Ollama models             | `/root/.ollama` (Docker volume)   | Recreate via `ollama pull` |
 
 ### Qdrant Backup
 
@@ -500,6 +574,12 @@ Restore from snapshot:
 ```bash
 docker cp <snapshot-path>/your_snapshot qdrant:/qdrant/snapshots/
 curl -X POST "http://localhost:6333/snapshots/restore/your_snapshot"
+```
+
+Alternatively, use the Makefile:
+
+```bash
+make qdrant-backup SNAP_DIR=./backups/qdrant-snapshots
 ```
 
 ### File-based Backup
@@ -573,7 +653,8 @@ Schedule regular backups using cron:
 **Problem: Slow ingestion**
 
 - Ingestion involves LLM calls for each document. Large PDFs or many sources will take time.
-- The change detection mechanism skips unchanged sources. If ingestion is slow on every run, check that content hashes are being recorded in `state/`.
+- The change detection mechanism skips unchanged sources. If ingestion is slow on every run, check that content hashes
+  are being recorded in `state/`.
 - Consider running ingestion during off-peak hours or on a schedule.
 
 **Problem: API key authentication not working**
@@ -586,3 +667,8 @@ Schedule regular backups using cron:
 
 - Ensure the frontend origin is in the `allow_origins` list in `src/server.py`.
 - For custom domains, update the CORS configuration before deploying.
+
+**Problem: Chat history not persisting**
+
+- Verify the `STATE_DIR` environment variable points to a writable directory.
+- Check that the SQLite database file exists in `state/chat_history.db`.

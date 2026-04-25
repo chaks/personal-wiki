@@ -1,6 +1,6 @@
 # Personal Wiki Chat
 
-A local AI-powered chat assistant that queries a persistent knowledge wiki.
+A local AI-powered chat assistant that queries a persistent knowledge wiki built from your documents, code, and notes.
 
 ## Features
 
@@ -10,8 +10,15 @@ A local AI-powered chat assistant that queries a persistent knowledge wiki.
 - **Semantic Search**: Qdrant vector index for intelligent query retrieval
 - **Local LLM**: Runs entirely offline with Ollama (gemma4:e2b for extraction, nomic-embed-text for embeddings)
 - **Change Detection**: Content-hash based tracking skips unchanged sources
+- **Source Management**: REST API and web UI for CRUD operations on data sources
+- **Wiki Browsing**: Web UI to browse and explore generated wiki pages
+- **Chat History**: SQLite-backed persistence for conversation sessions
+- **Markdown Rendering**: Rich markdown (headings, bold, tables, code blocks) in chat responses
+- **Async Processing**: Full async chat and search pipeline
 - **Wiki Maintenance**: LLM-generated markdown with entities, concepts, and links
-- **Health Checks**: Wiki linter detects orphan pages and other issues
+- **Wiki Lint**: 5 comprehensive checks (broken links, duplicates, contradictions, stale claims)
+- **Security**: API key authentication, rate limiting, prompt injection protection
+- **Health Checks**: Centralized service health endpoint
 
 ## Architecture
 
@@ -25,58 +32,56 @@ sources/ → Docling → wiki/ → Qdrant → Chat UI
 ### Wiki Structure
 
 The ingestion pipeline creates three types of pages:
+
 - `wiki/generated/` - Raw document summaries (from Docling)
 - `wiki/entities/` - Extracted entities (people, organizations, products, technologies)
 - `wiki/concepts/` - Extracted concepts (theories, patterns, methodologies)
+
+### Service Layers
+
+- `src/services/` - LLM provider and vector store abstractions
+- `src/ingestion/` - Code and URL ingestors
+- `src/pipeline/` - Pipeline runner and stage definitions
+- `src/routes/` - REST API routes (source management, wiki browsing)
+- `src/lint_checks/` - Wiki quality checks
 
 ## Quick Start
 
 ### Prerequisites
 
-- Python 3.11+
+- Python 3.12+
 - Ollama installed (`brew install ollama` or see [ollama.ai](https://ollama.ai))
 - Qdrant running (`docker run -p 6333:6333 qdrant/qdrant`)
 
 ### Setup
 
-1. **Install dependencies:**
+```bash
+make setup          # Create venv and install dependencies
+```
+
+Or manually:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-2. **Pull Ollama models:**
+### Models & Services
 
 ```bash
-ollama pull gemma4:e2b      # For entity/concept extraction
-ollama pull nomic-embed-text  # For semantic embeddings
+make ollama-pull    # Pull required Ollama models
+make qdrant-start   # Start Qdrant in Docker
 ```
 
-3. **Start Qdrant:**
+### Run the Server
 
 ```bash
-docker run -p 6333:6333 qdrant/qdrant
+make run            # Start the FastAPI server
+# or
+make run-dev        # Start with debug logging
 ```
 
-4. **Run the server:**
-
-```bash
-python -m src --host 0.0.0.0 --port 8000
-```
-
-5. **Open chat UI:** http://localhost:8000
-
-## Logging
-
-Logs are written to `logs/personal-wiki.log` (rotating, 10MB max) and stdout.
-
-**Enable debug logs:**
-
-```bash
-python -m src --log-level DEBUG
-```
-
-Valid log levels: `DEBUG`, `INFO`, `WARNING`, `ERROR` (default: `INFO`)
+Open http://localhost:8000 for the chat UI, http://localhost:8000/manage for source management,
+and http://localhost:8000/browse for wiki browsing.
 
 ## Usage
 
@@ -89,36 +94,68 @@ sources:
   - type: pdf
     path: sources/pdfs/my-document.pdf
     tags: [research, ai]
-  
+
   - type: url
     url: https://example.com/article
     tags: [reference]
-  
+
   - type: markdown
     path: sources/notes/meeting.md
     tags: [meetings]
+
+  - type: markdown
+    path: sources/markdown/essay-on-distributed-systems.md
+    full_pipeline: true    # Run LLM extraction (not just copy+index)
+    tags: [distributed-systems]
+
+  - type: code
+    path: sources/code/my-project
+    language: python
+    tags: [codebase]
 ```
+
+The `full_pipeline` flag controls whether markdown files go through the full LLM extraction (entity/concept extraction,
+wiki page creation) or are simply indexed as-is.
 
 ### Running Ingestion
 
-Process configured sources and extract entities/concepts:
-
 ```bash
-python -m src.ingest
+make ingest    # Process configured sources
 ```
 
 This will:
-1. Convert PDFs to markdown via Docling
-2. Extract entities and concepts using gemma4:e2b
+
+1. Convert PDFs to markdown via Docling, ingest URLs and code repositories
+2. Extract entities and concepts using gemma4:e2b (for full_pipeline sources)
 3. Create wiki pages in `wiki/entities/` and `wiki/concepts/`
 4. Index all pages in Qdrant for semantic search
 
+### Web UI Pages
+
+| Page   | URL                          | Description                       |
+|--------|------------------------------|-----------------------------------|
+| Chat   | http://localhost:8000/       | Ask questions against your wiki   |
+| Manage | http://localhost:8000/manage | Add, edit, enable/disable sources |
+| Browse | http://localhost:8000/browse | Browse and explore wiki pages     |
+
+### API Endpoints
+
+| Method   | Endpoint                 | Description                    |
+|----------|--------------------------|--------------------------------|
+| `GET`    | `/health`                | Service health check           |
+| `POST`   | `/chat`                  | Chat with wiki (SSE streaming) |
+| `POST`   | `/chat/async`            | Async chat (SSE streaming)     |
+| `GET`    | `/api/sources`           | List all sources               |
+| `POST`   | `/api/sources`           | Add a new source               |
+| `PUT`    | `/api/sources/{id}`      | Update a source                |
+| `DELETE` | `/api/sources/{id}`      | Delete a source                |
+| `GET`    | `/api/wiki/pages`        | List wiki pages                |
+| `GET`    | `/api/wiki/pages/{path}` | Get a wiki page                |
+
 ### Wiki Health Check
 
-Run the wiki linter to find orphan pages and other issues:
-
 ```bash
-python -m src --lint
+make lint-wiki    # Check for broken links, orphans, duplicates, etc.
 ```
 
 ### Directory Structure
@@ -127,21 +164,30 @@ python -m src --lint
 personal-wiki/
 ├── sources/          # Raw input documents (immutable)
 ├── wiki/             # LLM-maintained markdown
-├── state/            # Registry and state
+├── state/            # Registry and change-tracking state
 ├── static/           # Chat UI files
 ├── src/              # Python source code
-└── config/           # Configuration
+│   ├── routes/       # REST API routes
+│   ├── services/     # LLM and vector store abstractions
+│   ├── pipeline/     # Ingestion pipeline stages
+│   ├── ingestion/    # Code and URL ingestors
+│   └── lint_checks/  # Wiki quality checks
+├── config/           # Configuration
+├── Makefile          # Development commands
+└── tests/            # Test suite
 ```
 
-## API
+## Testing
 
-- `GET /health` - Health check
-- `POST /chat` - Chat endpoint (SSE streaming)
-- `GET /` - Serve chat UI
+```bash
+make test         # Run tests
+make test-cov     # Run tests with coverage
+```
 
 ## Deployment
 
-For comprehensive deployment instructions covering local development, production, cloud providers (AWS/GCP/Azure), security, monitoring, and troubleshooting, see [DEPLOYMENT.md](DEPLOYMENT.md).
+For comprehensive deployment instructions covering local development, production, cloud providers (AWS/GCP/Azure),
+security, monitoring, and troubleshooting, see [DEPLOYMENT.md](DEPLOYMENT.md).
 
 **Quick production deploy with Docker Compose:**
 
@@ -149,15 +195,29 @@ For comprehensive deployment instructions covering local development, production
 docker compose up --build -d
 ```
 
-## Testing
+## Makefile Reference
 
-```bash
-pytest tests/ -v
-```
+| Command                              | Description                          |
+|--------------------------------------|--------------------------------------|
+| `make setup`                         | Create venv and install dependencies |
+| `make run`                           | Start the server                     |
+| `make run-dev`                       | Start with debug logging             |
+| `make ingest`                        | Run document ingestion pipeline      |
+| `make lint-wiki`                     | Check wiki pages for issues          |
+| `make health`                        | Check all service health             |
+| `make qdrant-start/stop/status/logs` | Manage Qdrant container              |
+| `make qdrant-backup`                 | Create Qdrant snapshot backup        |
+| `make qdrant-restore`                | Restore Qdrant from snapshot         |
+| `make qdrant-wipe`                   | Destroy Qdrant container and data    |
+| `make ollama-pull`                   | Pull required Ollama models          |
+| `make test` / `make test-cov`        | Run tests                            |
+| `make clean`                         | Remove venv, caches, generated files |
 
 ## Acknowledgments
 
-This project is inspired by Andrej Karpathy's [LLM Wiki pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) — an incremental, persistent knowledge base where LLMs handle bookkeeping and humans curate.
+This project is inspired by Andrej
+Karpathy's [LLM Wiki pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) — an incremental,
+persistent knowledge base where LLMs handle bookkeeping and humans curate.
 
 ## License
 
