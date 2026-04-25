@@ -1,4 +1,24 @@
 // static/app.js
+// Configure marked for better output
+marked.setOptions({
+    breaks: true,
+    gfm: true,
+    highlight: function(code, lang) {
+        if (lang && hljs.getLanguage(lang)) {
+            return hljs.highlight(code, { language: lang }).value;
+        }
+        try {
+            return hljs.highlightAuto(code).value;
+        } catch (e) {
+            return code;
+        }
+    }
+});
+
+function renderMarkdown(text) {
+    return DOMPurify.sanitize(marked.parse(text));
+}
+
 const messagesContainer = document.getElementById('messages');
 const chatForm = document.getElementById('chat-form');
 const messageInput = document.getElementById('message-input');
@@ -9,7 +29,14 @@ let isStreaming = false;
 function addMessage(content, type) {
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${type}`;
-    messageDiv.textContent = content;
+    if (type === 'user') {
+        messageDiv.textContent = content;
+    } else {
+        messageDiv.innerHTML = renderMarkdown(content);
+        messageDiv.querySelectorAll('pre code').forEach(block => {
+            hljs.highlightElement(block);
+        });
+    }
     messagesContainer.appendChild(messageDiv);
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
     return messageDiv;
@@ -56,7 +83,7 @@ async function handleChat(message) {
         const reader = stream.getReader();
         const decoder = new TextDecoder();
 
-        assistantMessage.textContent = '';
+        assistantMessage.innerHTML = '';
 
         while (true) {
             const { done, value } = await reader.read();
@@ -74,7 +101,7 @@ async function handleChat(message) {
                         const parsed = JSON.parse(data);
                         if (parsed.text) {
                             fullResponse += parsed.text;
-                            assistantMessage.textContent = fullResponse;
+                            assistantMessage.innerHTML = renderMarkdown(fullResponse);
                             messagesContainer.scrollTop = messagesContainer.scrollHeight;
                         }
                     } catch (e) {
