@@ -3,6 +3,7 @@
 import asyncio
 import hashlib
 import logging
+import re
 from pathlib import Path
 from typing import Optional
 
@@ -13,6 +14,9 @@ from src.services.vector_store import VectorStore, QdrantStore, SearchPoint
 logger = logging.getLogger(__name__)
 
 EMBEDDING_DIM = 768
+# nomic-embed-text context window is ~8192 tokens; ~4 chars/token ~= 32000 chars
+# Use 3000 chars to be safe and leave room for metadata
+_CHUNK_SIZE = 3000
 
 
 class WikiIndexer:
@@ -52,37 +56,115 @@ class WikiIndexer:
     def _page_id(self, page_path: Path) -> str:
         """Generate unique UUID-style ID for page."""
         rel_path = page_path.relative_to(self.wiki_dir)
-        # Generate a UUID v5-like string from the path hash
         hash_hex = hashlib.sha256(str(rel_path).encode()).hexdigest()
-        # Format as UUID: 8-4-4-4-12 characters
         page_id = f"{hash_hex[:8]}-{hash_hex[8:12]}-{hash_hex[12:16]}-{hash_hex[16:20]}-{hash_hex[20:32]}"
         logger.debug(f"Generated page ID {page_id} for {rel_path}")
         return page_id
 
+    def _chunk_id(self, page_path: Path, chunk_index: int) -> str:
+        """Generate unique ID for a page chunk."""
+        rel_path = page_path.relative_to(self.wiki_dir)
+        hash_hex = hashlib.sha256(f"{rel_path}:chunk:{chunk_index}".encode()).hexdigest()
+        return f"{hash_hex[:8]}-{hash_hex[8:12]}-{hash_hex[12:16]}-{hash_hex[16:20]}-{hash_hex[20:32]}"
+
+    def _split_into_chunks(self, content: str, title: str) -> list[str]:
+        """Split markdown content into chunks by heading boundaries.
+
+        Preserves section structure by splitting at ## headings.
+        Falls back to fixed-size chunking if no headings found.
+
+        Args:
+            content: Markdown content
+            title: Page title for metadata
+
+        Returns:
+            List of text chunks
+        """
+        # Try splitting by ## headings first
+        sections = re.split(r'(?=^##\s)', content, flags=re.MULTILINE)
+        sections = [s.strip() for s in sections if s.strip()]
+
+        if len(sections) > 1:
+            chunks = []
+            current = ""
+            for section in sections:
+                if len(current) + len(section) <= _CHUNK_SIZE:
+                    current += "\n" + section if current else section
+                else:
+                    if current:
+                        chunks.append(current.strip())
+                    if len(section) > _CHUNK_SIZE:
+                        # Section itself is too long, split by fixed size
+                        for i in range(0, len(section), _CHUNK_SIZE):
+                            chunks.append(section[i:i + _CHUNK_SIZE])
+                    else:
+                        current = section
+            if current:
+                chunks.append(current.strip())
+            return chunks
+
+        # Fall back to fixed-size chunking
+        chunks = []
+        for i in range(0, len(content), _CHUNK_SIZE):
+            chunks.append(content[i:i + _CHUNK_SIZE])
+        return chunks
+
     def index_page(self, page_path: Path) -> None:
-        """Embed and index a wiki page."""
+        """Embed and index a wiki page, chunking if needed."""
         logger.info(f"Indexing page: {page_path}")
         content = page_path.read_text()
         logger.debug(f"Read {len(content)} chars from {page_path}")
 
-        embedding = self._get_embedding(content)
+        chunks = self._split_into_chunks(content, page_path.stem)
         page_id = self._page_id(page_path)
         rel_path = str(page_path.relative_to(self.wiki_dir))
+        title = page_path.stem
 
-        logger.debug(f"Upserting page {page_id} to vector store")
-        self.client.upsert(
-            collection_name=self.COLLECTION_NAME,
-            points=[{
-                "id": page_id,
-                "vector": embedding,
+        logger.info(f"Split {page_path.name} into {len(chunks)} chunk(s)")
+
+        # Index each chunk as a separate point
+        points = []
+        for i, chunk in enumerate(chunks):
+            chunk_embedding = self._get_embedding(chunk)
+            cid = self._chunk_id(page_path, i)
+
+            # For single-chunk pages, use page_id; otherwise use chunk_id
+            point_id = page_id if len(chunks) == 1 else cid
+
+            points.append({
+                "id": point_id,
+                "vector": chunk_embedding,
                 "payload": {
                     "path": rel_path,
-                    "content": content,
-                    "title": page_path.stem,
+                    "content": chunk,
+                    "title": title,
+                    "chunk_index": i,
+                    "total_chunks": len(chunks),
                 },
-            }],
+            })
+
+        # Also upsert a page-level point with concatenated summary
+        # (first 2000 chars as the "overview" embedding)
+        if len(chunks) > 1:
+            overview = content[:2000]
+            overview_embedding = self._get_embedding(overview)
+            points.append({
+                "id": page_id,
+                "vector": overview_embedding,
+                "payload": {
+                    "path": rel_path,
+                    "content": overview,
+                    "title": title,
+                    "chunk_index": -1,  # marks page-level point
+                    "total_chunks": len(chunks),
+                },
+            })
+
+        self.client.upsert(
+            collection_name=self.COLLECTION_NAME,
+            points=points,
         )
-        logger.info(f"Successfully indexed {page_path.name}")
+        logger.info(f"Successfully indexed {page_path.name} ({len(points)} points)")
 
     def index_all_wiki_pages(self) -> int:
         """Index all markdown files in the wiki directory."""
@@ -121,7 +203,6 @@ class WikiIndexer:
     async def _get_embedding_async(self, text: str) -> list[float]:
         """Get embedding for text using Ollama asynchronously."""
         logger.debug(f"Generating embedding for {len(text)} chars")
-        # ollama doesn't have native async support, so we use asyncio.to_thread
         response = await asyncio.to_thread(
             ollama.embeddings, model="nomic-embed-text", prompt=text
         )
@@ -135,32 +216,58 @@ class WikiIndexer:
         content = page_path.read_text()
         logger.debug(f"Read {len(content)} chars from {page_path}")
 
-        embedding = await self._get_embedding_async(content)
+        chunks = self._split_into_chunks(content, page_path.stem)
         page_id = self._page_id(page_path)
         rel_path = str(page_path.relative_to(self.wiki_dir))
+        title = page_path.stem
 
-        logger.debug(f"Upserting page {page_id} to vector store")
-        await self.client.upsert_async(
-            collection_name=self.COLLECTION_NAME,
-            points=[{
-                "id": page_id,
-                "vector": embedding,
+        logger.info(f"Split {page_path.name} into {len(chunks)} chunk(s)")
+
+        points = []
+        for i, chunk in enumerate(chunks):
+            chunk_embedding = await self._get_embedding_async(chunk)
+            cid = self._chunk_id(page_path, i)
+            point_id = page_id if len(chunks) == 1 else cid
+
+            points.append({
+                "id": point_id,
+                "vector": chunk_embedding,
                 "payload": {
                     "path": rel_path,
-                    "content": content,
-                    "title": page_path.stem,
+                    "content": chunk,
+                    "title": title,
+                    "chunk_index": i,
+                    "total_chunks": len(chunks),
                 },
-            }],
+            })
+
+        if len(chunks) > 1:
+            overview = content[:2000]
+            overview_embedding = await self._get_embedding_async(overview)
+            points.append({
+                "id": page_id,
+                "vector": overview_embedding,
+                "payload": {
+                    "path": rel_path,
+                    "content": overview,
+                    "title": title,
+                    "chunk_index": -1,
+                    "total_chunks": len(chunks),
+                },
+            })
+
+        await self.client.upsert_async(
+            collection_name=self.COLLECTION_NAME,
+            points=points,
         )
-        logger.info(f"Successfully indexed {page_path.name}")
+        logger.info(f"Successfully indexed {page_path.name} ({len(points)} points)")
 
     async def index_all_wiki_pages_async(self) -> int:
         """Index all markdown files in the wiki directory with concurrency limiting."""
         indexed = 0
-        semaphore = asyncio.Semaphore(5)  # Limit concurrency to 5
+        semaphore = asyncio.Semaphore(5)
 
         async def index_with_semaphore(page: Path) -> bool:
-            """Index a page with semaphore control."""
             async with semaphore:
                 try:
                     await self.index_page_async(page)

@@ -66,27 +66,31 @@ ingestion:
   # LLM prompts for extraction
   prompts:
     extract_entities: |
-      Read the following document and extract key entities (concrete things like
-      people, organizations, products, technologies). For each entity, provide:
-      - Name
-      - Type (person, organization, product, technology, etc.)
-      - Brief description
+      Extract key entities from this document. Rules:
+      - Output ONLY lines starting with "ENTITY:" — no other text whatsoever
+      - Each entity on its own line
+      - Use the exact format: ENTITY: <name> | <type> | <description>
+      - Types: person, organization, product, technology, framework, protocol, pattern, methodology, book, company
 
-      Format each entity as:
-      ENTITY: <name> | <type> | <description>
+      Example output:
+      ENTITY: REST | technology | Architectural style for distributed hypermedia systems
+      ENTITY: HATEOAS | pattern | Hypermedia constraint enabling client discovery of available actions
+      ENTITY: Fielding | person | Dissertation author who formalized REST architectural style
 
       Document:
       {document}
 
     extract_concepts: |
-      Read the following document and extract key concepts (abstract ideas like
-      theories, patterns, methodologies, principles). For each concept, provide:
-      - Name
-      - Definition
-      - Related entities
+      Extract key concepts from this document. Rules:
+      - Output ONLY lines starting with "CONCEPT:" — no other text whatsoever
+      - Each concept on its own line
+      - Use the exact format: CONCEPT: <name> | <definition> | <related_entities>
+      - Keep definitions to one short sentence
+      - List comma-separated related entity names (or "N/A")
 
-      Format each concept as:
-      CONCEPT: <name> | <definition> | <related_entities>
+      Example output:
+      CONCEPT: Resource-oriented design | API design approach focusing on nouns/resources rather than verbs/actions | REST, HTTP
+      CONCEPT: Hypermedia as the engine of application state | Client navigates an API through links embedded in responses | HATEOAS, REST
 
       Document:
       {document}

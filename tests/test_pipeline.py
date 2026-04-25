@@ -6,11 +6,11 @@ from unittest.mock import Mock, patch, MagicMock
 from dataclasses import dataclass, field
 from typing import Optional
 
-# Import from ingestion.py file (not the package)
+# Import from docling_ingestor.py (where the pipeline stages live)
 import importlib.util
 _spec = importlib.util.spec_from_file_location(
-    "ingestion_file",
-    Path(__file__).parent.parent / "src" / "ingestion.py"
+    "docling_ingestor_file",
+    Path(__file__).parent.parent / "src" / "docling_ingestor.py"
 )
 _ingestion_file = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_ingestion_file)

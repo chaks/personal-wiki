@@ -2,7 +2,7 @@
 import asyncio
 import logging
 from abc import ABC, abstractmethod
-from typing import AsyncIterator, Iterator
+from typing import AsyncIterator, Iterator, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -80,14 +80,21 @@ class OllamaProvider(LLMProvider):
         self.model = model
         logger.debug(f"OllamaProvider initialized with model: {model}")
 
-    def generate(self, prompt: str) -> str:
+    def generate(self, prompt: str, system: Optional[str] = None) -> str:
         """Generate completion using ollama.chat."""
         import ollama
 
         logger.debug(f"Generating with model={self.model}, prompt_len={len(prompt)}")
+        if system:
+            messages = [
+                {"role": "system", "content": system},
+                {"role": "user", "content": prompt},
+            ]
+        else:
+            messages = [{"role": "user", "content": prompt}]
         response = ollama.chat(
             model=self.model,
-            messages=[{"role": "user", "content": prompt}]
+            messages=messages,
         )
         content = response.get("message", {}).get("content", "")
         return content or ""
