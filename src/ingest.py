@@ -24,7 +24,7 @@ def load_sources(config_path: Path) -> list[dict]:
     logger.debug(f"Loading sources from {config_path}")
     with open(config_path) as f:
         config = yaml.safe_load(f)
-    sources = config.get("sources", [])
+    sources = config.get("sources") or []
     logger.info(f"Loaded {len(sources)} sources from config")
     return sources
 
