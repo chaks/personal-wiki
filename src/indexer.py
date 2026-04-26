@@ -1,4 +1,3 @@
-# src/indexer.py
 """Qdrant-based semantic indexing for wiki pages."""
 import asyncio
 import hashlib
@@ -7,51 +6,38 @@ import re
 from pathlib import Path
 from typing import Optional
 
-import ollama
-
-from src.services.vector_store import VectorStore, QdrantStore, SearchPoint
+from src.services.llm_provider import LLMProvider, OllamaProvider
+from src.services.vector_store import VectorStore, QdrantStore
 
 logger = logging.getLogger(__name__)
 
 EMBEDDING_DIM = 768
-# nomic-embed-text context window is ~8192 tokens; ~4 chars/token ~= 32000 chars
-# Use 3000 chars to be safe and leave room for metadata
 _CHUNK_SIZE = 3000
 
 
 class WikiIndexer:
-    """Indexes wiki pages in Qdrant for semantic search."""
+    """Indexes wiki pages in Qdrant for semantic search.
+
+    Async methods (index_page_async, search_async, index_all_wiki_pages_async)
+    are the primary interface. Sync methods (index_page, search,
+    index_all_wiki_pages) exist only for legacy callers and wrap async
+    via asyncio.run(). The vector_store must be async-native
+    (QdrantStore or test double) — sync callers wrap it with
+    SyncVectorStore at construction time.
+    """
 
     COLLECTION_NAME = "personal_wiki"
 
     def __init__(
         self,
         wiki_dir: Path,
-        qdrant_url: str = "http://localhost:6333",
         vector_store: Optional[VectorStore] = None,
+        llm_provider: Optional[LLMProvider] = None,
     ):
         self.wiki_dir = Path(wiki_dir)
-        self.qdrant_url = qdrant_url
         self.vector_store = vector_store
-        self._client = None
+        self.llm_provider = llm_provider or OllamaProvider()
         logger.debug(f"WikiIndexer initialized: wiki_dir={wiki_dir}, vector_store={type(vector_store).__name__ if vector_store else 'QdrantStore'}")
-
-    @property
-    def client(self):
-        """Lazy-init Qdrant client for backward compatibility."""
-        if self._client is None:
-            if self.vector_store is None:
-                self.vector_store = QdrantStore(url=self.qdrant_url)
-            logger.info(f"Initialized vector store: {type(self.vector_store).__name__}")
-        return self.vector_store
-
-    def _get_embedding(self, text: str) -> list[float]:
-        """Get embedding for text using Ollama."""
-        logger.debug(f"Generating embedding for {len(text)} chars")
-        response = ollama.embeddings(model="nomic-embed-text", prompt=text)
-        embedding = response["embedding"]
-        logger.debug(f"Generated embedding with {len(embedding)} dimensions")
-        return embedding
 
     def _page_id(self, page_path: Path) -> str:
         """Generate unique UUID-style ID for page."""
@@ -80,7 +66,6 @@ class WikiIndexer:
         Returns:
             List of text chunks
         """
-        # Try splitting by ## headings first
         sections = re.split(r'(?=^##\s)', content, flags=re.MULTILINE)
         sections = [s.strip() for s in sections if s.strip()]
 
@@ -94,7 +79,6 @@ class WikiIndexer:
                     if current:
                         chunks.append(current.strip())
                     if len(section) > _CHUNK_SIZE:
-                        # Section itself is too long, split by fixed size
                         for i in range(0, len(section), _CHUNK_SIZE):
                             chunks.append(section[i:i + _CHUNK_SIZE])
                     else:
@@ -103,115 +87,16 @@ class WikiIndexer:
                 chunks.append(current.strip())
             return chunks
 
-        # Fall back to fixed-size chunking
         chunks = []
         for i in range(0, len(content), _CHUNK_SIZE):
             chunks.append(content[i:i + _CHUNK_SIZE])
         return chunks
 
-    def index_page(self, page_path: Path) -> None:
-        """Embed and index a wiki page, chunking if needed."""
-        logger.info(f"Indexing page: {page_path}")
-        content = page_path.read_text()
-        logger.debug(f"Read {len(content)} chars from {page_path}")
-
-        chunks = self._split_into_chunks(content, page_path.stem)
-        page_id = self._page_id(page_path)
-        rel_path = str(page_path.relative_to(self.wiki_dir))
-        title = page_path.stem
-
-        logger.info(f"Split {page_path.name} into {len(chunks)} chunk(s)")
-
-        # Index each chunk as a separate point
-        points = []
-        for i, chunk in enumerate(chunks):
-            chunk_embedding = self._get_embedding(chunk)
-            cid = self._chunk_id(page_path, i)
-
-            # For single-chunk pages, use page_id; otherwise use chunk_id
-            point_id = page_id if len(chunks) == 1 else cid
-
-            points.append({
-                "id": point_id,
-                "vector": chunk_embedding,
-                "payload": {
-                    "path": rel_path,
-                    "content": chunk,
-                    "title": title,
-                    "chunk_index": i,
-                    "total_chunks": len(chunks),
-                },
-            })
-
-        # Also upsert a page-level point with concatenated summary
-        # (first 2000 chars as the "overview" embedding)
-        if len(chunks) > 1:
-            overview = content[:2000]
-            overview_embedding = self._get_embedding(overview)
-            points.append({
-                "id": page_id,
-                "vector": overview_embedding,
-                "payload": {
-                    "path": rel_path,
-                    "content": overview,
-                    "title": title,
-                    "chunk_index": -1,  # marks page-level point
-                    "total_chunks": len(chunks),
-                },
-            })
-
-        self.client.upsert(
-            collection_name=self.COLLECTION_NAME,
-            points=points,
-        )
-        logger.info(f"Successfully indexed {page_path.name} ({len(points)} points)")
-
-    def index_all_wiki_pages(self) -> int:
-        """Index all markdown files in the wiki directory."""
-        indexed = 0
-        for md_file in self.wiki_dir.rglob("*.md"):
-            try:
-                self.index_page(md_file)
-                indexed += 1
-            except Exception as e:
-                logger.error(f"Failed to index {md_file}: {e}")
-        logger.info(f"Indexed {indexed} wiki pages")
-        return indexed
-
-    def search(self, query: str, top_k: int = 5) -> list[dict]:
-        """Search for relevant wiki pages."""
-        logger.info(f"Searching wiki for: {query[:50]}... (top_k={top_k})")
-        query_embedding = self._get_embedding(query)
-
-        results = self.client.search(
-            collection_name=self.COLLECTION_NAME,
-            query_vector=query_embedding,
-            limit=top_k
-        )
-
-        result_dicts = [
-            {
-                "path": hit.payload["path"],
-                "content": hit.payload["content"],
-                "score": hit.score,
-            }
-            for hit in results
-        ]
-        logger.info(f"Search returned {len(result_dicts)} results")
-        return result_dicts
-
-    async def _get_embedding_async(self, text: str) -> list[float]:
-        """Get embedding for text using Ollama asynchronously."""
-        logger.debug(f"Generating embedding for {len(text)} chars")
-        response = await asyncio.to_thread(
-            ollama.embeddings, model="nomic-embed-text", prompt=text
-        )
-        embedding = response["embedding"]
-        logger.debug(f"Generated embedding with {len(embedding)} dimensions")
-        return embedding
-
     async def index_page_async(self, page_path: Path) -> None:
         """Embed and index a wiki page asynchronously."""
+        if self.vector_store is None:
+            self.vector_store = QdrantStore(url="http://localhost:6333")
+
         logger.info(f"Indexing page: {page_path}")
         content = page_path.read_text()
         logger.debug(f"Read {len(content)} chars from {page_path}")
@@ -225,7 +110,7 @@ class WikiIndexer:
 
         points = []
         for i, chunk in enumerate(chunks):
-            chunk_embedding = await self._get_embedding_async(chunk)
+            chunk_embedding = await self.llm_provider.embed_async(chunk)
             cid = self._chunk_id(page_path, i)
             point_id = page_id if len(chunks) == 1 else cid
 
@@ -243,7 +128,7 @@ class WikiIndexer:
 
         if len(chunks) > 1:
             overview = content[:2000]
-            overview_embedding = await self._get_embedding_async(overview)
+            overview_embedding = await self.llm_provider.embed_async(overview)
             points.append({
                 "id": page_id,
                 "vector": overview_embedding,
@@ -256,11 +141,23 @@ class WikiIndexer:
                 },
             })
 
-        await self.client.upsert_async(
+        await self.vector_store.upsert(
             collection_name=self.COLLECTION_NAME,
             points=points,
         )
         logger.info(f"Successfully indexed {page_path.name} ({len(points)} points)")
+
+    def index_page(self, page_path: Path) -> None:
+        """Synchronously embed and index a wiki page (legacy wrapper).
+
+        For sync callers that create WikiIndexer without an injected
+        vector_store, a raw QdrantStore is lazy-initialized. The
+        asyncio.run() boundary is safe here because sync callers
+        don't have an active event loop.
+        """
+        if self.vector_store is None:
+            self.vector_store = QdrantStore(url="http://localhost:6333")
+        asyncio.run(self.index_page_async(page_path))
 
     async def index_all_wiki_pages_async(self) -> int:
         """Index all markdown files in the wiki directory with concurrency limiting."""
@@ -285,12 +182,21 @@ class WikiIndexer:
         logger.info(f"Indexed {indexed} wiki pages")
         return indexed
 
+    def index_all_wiki_pages(self) -> int:
+        """Synchronously index all markdown files in the wiki directory."""
+        if self.vector_store is None:
+            self.vector_store = QdrantStore(url="http://localhost:6333")
+        return asyncio.run(self.index_all_wiki_pages_async())
+
     async def search_async(self, query: str, top_k: int = 5) -> list[dict]:
         """Asynchronously search for relevant wiki pages."""
-        logger.info(f"Async searching wiki for: {query[:50]}... (top_k={top_k})")
-        query_embedding = await self._get_embedding_async(query)
+        if self.vector_store is None:
+            self.vector_store = QdrantStore(url="http://localhost:6333")
 
-        results = await self.client.search_async(
+        logger.info(f"Async searching wiki for: {query[:50]}... (top_k={top_k})")
+        query_embedding = await self.llm_provider.embed_async(query)
+
+        results = await self.vector_store.search(
             collection_name=self.COLLECTION_NAME,
             query_vector=query_embedding,
             limit=top_k
@@ -306,3 +212,9 @@ class WikiIndexer:
         ]
         logger.info(f"Async search returned {len(result_dicts)} results")
         return result_dicts
+
+    def search(self, query: str, top_k: int = 5) -> list[dict]:
+        """Synchronously search for relevant wiki pages (legacy wrapper)."""
+        if self.vector_store is None:
+            self.vector_store = QdrantStore(url="http://localhost:6333")
+        return asyncio.run(self.search_async(query, top_k))

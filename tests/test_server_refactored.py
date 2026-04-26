@@ -28,29 +28,24 @@ class MockLLMProvider(LLMProvider):
     async def generate_stream_async(self, prompt: str, system: str | None = None):
         yield self.response
 
+    def embed(self, text: str) -> list[float]:
+        return [0.1] * 768
+
+    async def embed_async(self, text: str) -> list[float]:
+        return [0.1] * 768
+
 
 class MockVectorStore(VectorStore):
-    def upsert(self, collection_name: str, points: list[dict]) -> bool:
+    async def upsert(self, collection_name: str, points: list[dict]) -> bool:
         return True
 
-    def search(
+    async def search(
         self,
         collection_name: str,
         query_vector: list[float],
         limit: int = 5
     ) -> list[SearchPoint]:
         return []
-
-    async def search_async(
-        self,
-        collection_name: str,
-        query_vector: list[float],
-        limit: int = 5
-    ) -> list[SearchPoint]:
-        return []
-
-    async def upsert_async(self, collection_name: str, points: list[dict]) -> bool:
-        return True
 
     def health_check(self) -> bool:
         return True

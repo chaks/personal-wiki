@@ -92,7 +92,7 @@ def create_app(
     # Register wiki browsing routes
     app.include_router(browse_router)
 
-    indexer = WikiIndexer(wiki_dir, vector_store=vector_store)
+    indexer = WikiIndexer(wiki_dir, vector_store=vector_store, llm_provider=llm_provider)
     chat_engine = ChatEngine(wiki_dir, indexer, llm_provider=llm_provider)
     logger.info("Initialized WikiIndexer and ChatEngine with injected services")
 
@@ -173,7 +173,7 @@ async def stream_chat_response(
 
     logger.debug(f"Searching wiki for: {message[:50]}...")
     start_time = time.time()
-    context_pages = chat_engine.search(message)
+    context_pages = await chat_engine.search_async(message)
     search_duration = time.time() - start_time
 
     logger.info(

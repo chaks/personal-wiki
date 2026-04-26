@@ -70,6 +70,30 @@ class LLMProvider(ABC):
         """
         pass
 
+    @abstractmethod
+    def embed(self, text: str) -> list[float]:
+        """Generate an embedding vector for the given text.
+
+        Args:
+            text: The text to embed
+
+        Returns:
+            Embedding vector
+        """
+        pass
+
+    @abstractmethod
+    async def embed_async(self, text: str) -> list[float]:
+        """Asynchronously generate an embedding vector for the given text.
+
+        Args:
+            text: The text to embed
+
+        Returns:
+            Embedding vector
+        """
+        pass
+
 
 class OllamaProvider(LLMProvider):
     """Ollama implementation of LLM provider."""
@@ -180,3 +204,24 @@ class OllamaProvider(LLMProvider):
             response = chunk.get("message", {}).get("content", "")
             if response:
                 yield response
+
+    def embed(self, text: str) -> list[float]:
+        """Generate embedding using ollama.embeddings."""
+        import ollama
+
+        logger.debug(f"Embedding with model=nomic-embed-text, text_len={len(text)}")
+        response = ollama.embeddings(
+            model="nomic-embed-text",
+            prompt=text,
+        )
+        return response["embedding"]
+
+    async def embed_async(self, text: str) -> list[float]:
+        """Generate embedding asynchronously using ollama.embeddings."""
+        import ollama
+
+        logger.debug(f"Async embedding with model=nomic-embed-text, text_len={len(text)}")
+        response = await asyncio.to_thread(
+            ollama.embeddings, model="nomic-embed-text", prompt=text
+        )
+        return response["embedding"]

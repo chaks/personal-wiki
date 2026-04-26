@@ -1,23 +1,56 @@
-# tests/test_indexer.py
+"""Tests for WikiIndexer — sync/async unified via async core + LLMProvider injection."""
 import pytest
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, patch, MagicMock
 from src.indexer import WikiIndexer
-from src.services.vector_store import VectorStore, SearchPoint
+from src.services.vector_store import SearchPoint
 
 
-class MockVectorStore(VectorStore):
-    """Test double for vector store."""
+class FakeLLMProvider:
+    """Deterministic provider for tests — returns fixed embeddings."""
+
+    def __init__(self, dim=768):
+        self.embed_calls = []
+        self.dim = dim
+
+    def embed(self, text: str) -> list[float]:
+        self.embed_calls.append(text)
+        return [0.1] * self.dim
+
+    async def embed_async(self, text: str) -> list[float]:
+        self.embed_calls.append(text)
+        return [0.1] * self.dim
+
+    def generate(self, prompt: str, system=None) -> str:
+        return "fake"
+
+    def generate_stream(self, prompt: str, system=None):
+        yield "fake"
+
+    def generate_async(self, prompt: str, system=None):
+        return "fake"
+
+    def generate_stream_async(self, prompt: str, system=None):
+        async def gen():
+            yield "fake"
+        return gen()
+
+    def health_check(self) -> bool:
+        return True
+
+
+class MockVectorStore:
+    """Test double for async vector store."""
 
     def __init__(self):
         self.upserted_points = []
         self.search_queries = []
 
-    def upsert(self, collection_name: str, points: list[dict]) -> bool:
+    async def upsert(self, collection_name: str, points: list[dict]) -> bool:
         self.upserted_points.extend(points)
         return True
 
-    def search(
+    async def search(
         self,
         collection_name: str,
         query_vector: list[float],
@@ -31,25 +64,6 @@ class MockVectorStore(VectorStore):
                 payload={"path": "test.md", "content": "test content"}
             )
         ]
-
-    async def search_async(
-        self,
-        collection_name: str,
-        query_vector: list[float],
-        limit: int = 5
-    ) -> list[SearchPoint]:
-        self.search_queries.append((query_vector, limit))
-        return [
-            SearchPoint(
-                id="test-id",
-                score=0.95,
-                payload={"path": "test.md", "content": "test content"}
-            )
-        ]
-
-    async def upsert_async(self, collection_name: str, points: list[dict]) -> bool:
-        self.upserted_points.extend(points)
-        return True
 
     def health_check(self) -> bool:
         return True
@@ -66,40 +80,146 @@ def wiki_dir(tmp_path):
     return wiki_dir
 
 
-def test_indexer_initializes(wiki_dir):
-    """Indexer initializes with wiki directory."""
-    indexer = WikiIndexer(wiki_dir, "http://localhost:6333")
-    assert indexer.wiki_dir == wiki_dir
-    assert indexer.qdrant_url == "http://localhost:6333"
+@pytest.fixture
+def fake_llm():
+    return FakeLLMProvider()
 
 
-@patch("src.indexer.ollama")
-def test_index_wiki_page(mock_ollama, wiki_dir):
-    """Indexer embeds and stores wiki page."""
-    mock_ollama.embeddings.return_value = {"embedding": [0.1] * 768}
-
-    mock_store = MockVectorStore()
-
-    page_file = wiki_dir / "concepts" / "test.md"
-    page_file.parent.mkdir()
-    page_file.write_text("---\ntitle: Test\n---\n\nContent here")
-
-    indexer = WikiIndexer(wiki_dir, "http://localhost:6333", vector_store=mock_store)
-    indexer.index_page(page_file)
-
-    assert len(mock_store.upserted_points) == 1
+@pytest.fixture
+def mock_store():
+    return MockVectorStore()
 
 
-@patch("src.indexer.ollama")
-def test_search_returns_results(mock_ollama, wiki_dir):
-    """Search returns relevant wiki pages."""
-    mock_ollama.embeddings.return_value = {"embedding": [0.1] * 768}
+class TestWikiIndexerInit:
+    """WikiIndexer initialization tests."""
 
-    mock_store = MockVectorStore()
+    def test_initializes_with_injected_llm(self, wiki_dir, fake_llm):
+        """WikiIndexer accepts LLMProvider and uses it for embeddings."""
+        indexer = WikiIndexer(wiki_dir, llm_provider=fake_llm, vector_store=mock_store)
+        assert indexer.llm_provider is fake_llm
 
-    indexer = WikiIndexer(wiki_dir, "http://localhost:6333", vector_store=mock_store)
-    results = indexer.search("test query", top_k=5)
+    def test_initializes_with_vector_store(self, wiki_dir, fake_llm):
+        """WikiIndexer uses injected vector store."""
+        indexer = WikiIndexer(wiki_dir, llm_provider=fake_llm, vector_store=mock_store)
+        assert indexer.vector_store is mock_store
 
-    assert isinstance(results, list)
-    assert len(results) == 1
-    assert results[0]["path"] == "test.md"
+
+class TestWikiIndexerPage:
+    """index_page / index_page_async tests."""
+
+    @pytest.mark.asyncio
+    async def test_index_page_async(self, wiki_dir, fake_llm):
+        """index_page_async embeds and stores a page."""
+        mock_store = MockVectorStore()
+        indexer = WikiIndexer(wiki_dir, llm_provider=fake_llm, vector_store=mock_store)
+
+        page_file = wiki_dir / "test.md"
+        page_file.write_text("---\ntitle: Test\n---\n\nContent here")
+
+        await indexer.index_page_async(page_file)
+
+        assert len(mock_store.upserted_points) == 1
+        assert mock_store.upserted_points[0]["payload"]["path"] == "test.md"
+        assert len(fake_llm.embed_calls) == 1  # single-chunk page, one embedding
+
+    def test_index_page_sync(self, wiki_dir, fake_llm):
+        """index_page sync wrapper calls index_page_async internally."""
+        mock_store = MockVectorStore()
+        indexer = WikiIndexer(wiki_dir, llm_provider=fake_llm, vector_store=mock_store)
+
+        page_file = wiki_dir / "test.md"
+        page_file.write_text("---\ntitle: Test\n---\n\nContent here")
+
+        indexer.index_page(page_file)
+
+        assert len(mock_store.upserted_points) == 1
+
+    @pytest.mark.asyncio
+    async def test_index_page_multi_chunk(self, wiki_dir, fake_llm):
+        """Multi-chunk pages produce chunk embeddings plus overview."""
+        mock_store = MockVectorStore()
+        indexer = WikiIndexer(wiki_dir, llm_provider=fake_llm, vector_store=mock_store)
+
+        # Create content large enough to trigger multi-chunk
+        long_content = "## Section 1\n" + "A" * 4000
+        page_file = wiki_dir / "long.md"
+        page_file.write_text(long_content)
+
+        await indexer.index_page_async(page_file)
+
+        # At least 2 points: chunk(s) + overview
+        assert len(mock_store.upserted_points) >= 2
+
+    @pytest.mark.asyncio
+    async def test_index_page_async_embeds_via_llm_provider(self, wiki_dir, fake_llm):
+        """Embeddings come from LLMProvider, not direct ollama call."""
+        mock_store = MockVectorStore()
+        indexer = WikiIndexer(wiki_dir, llm_provider=fake_llm, vector_store=mock_store)
+
+        page_file = wiki_dir / "test.md"
+        page_file.write_text("Content")
+
+        await indexer.index_page_async(page_file)
+
+        assert len(fake_llm.embed_calls) == 1
+        assert fake_llm.embed_calls[0] == "Content"
+
+
+class TestWikiIndexerSearch:
+    """search / search_async tests."""
+
+    @pytest.mark.asyncio
+    async def test_search_async(self, wiki_dir, fake_llm):
+        """search_async returns results from vector store."""
+        mock_store = MockVectorStore()
+        indexer = WikiIndexer(wiki_dir, llm_provider=fake_llm, vector_store=mock_store)
+
+        results = await indexer.search_async("test query", top_k=5)
+
+        assert len(results) == 1
+        assert results[0]["path"] == "test.md"
+        assert results[0]["score"] == 0.95
+        assert len(fake_llm.embed_calls) == 1
+
+    def test_search_sync(self, wiki_dir, fake_llm):
+        """search sync wrapper delegates to search_async."""
+        mock_store = MockVectorStore()
+        indexer = WikiIndexer(wiki_dir, llm_provider=fake_llm, vector_store=mock_store)
+
+        results = indexer.search("test query", top_k=5)
+
+        assert len(results) == 1
+
+
+class TestWikiIndexerBatch:
+    """index_all_wiki_pages tests."""
+
+    @pytest.mark.asyncio
+    async def test_index_all_wiki_pages_async(self, wiki_dir, fake_llm):
+        """index_all_wiki_pages_async indexes all markdown files."""
+        mock_store = MockVectorStore()
+        indexer = WikiIndexer(wiki_dir, llm_provider=fake_llm, vector_store=mock_store)
+
+        (wiki_dir / "page1.md").write_text("Content 1")
+        (wiki_dir / "page2.md").write_text("Content 2")
+        (wiki_dir / "page3.md").write_text("Content 3")
+
+        subdir = wiki_dir / "subdir"
+        subdir.mkdir()
+        (subdir / "page4.md").write_text("Content 4")
+
+        count = await indexer.index_all_wiki_pages_async()
+
+        assert count == 4
+
+    def test_index_all_wiki_pages_sync(self, wiki_dir, fake_llm):
+        """index_all_wiki_pages sync wrapper delegates to async."""
+        mock_store = MockVectorStore()
+        indexer = WikiIndexer(wiki_dir, llm_provider=fake_llm, vector_store=mock_store)
+
+        (wiki_dir / "page1.md").write_text("Content 1")
+        (wiki_dir / "page2.md").write_text("Content 2")
+
+        count = indexer.index_all_wiki_pages()
+
+        assert count == 2

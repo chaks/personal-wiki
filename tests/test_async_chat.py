@@ -52,6 +52,12 @@ class MockAsyncLLMProvider(LLMProvider):
         yield "async chunk 1"
         yield "async chunk 2"
 
+    def embed(self, text: str) -> list[float]:
+        return [0.1] * 768
+
+    async def embed_async(self, text: str) -> list[float]:
+        return [0.1] * 768
+
 
 @pytest.fixture
 def anyio_backend():
