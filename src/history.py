@@ -1,6 +1,8 @@
 """Chat history persistence with SQLite."""
 import json
 import logging
+import sqlite3
+from pathlib import Path
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -9,14 +11,33 @@ logger = logging.getLogger(__name__)
 class ChatHistory:
     """Manages chat history persistence in SQLite."""
 
-    def __init__(self, conn):
-        """Initialize ChatHistory with a database connection.
+    def __init__(self, db_path: Path):
+        """Initialize ChatHistory with a database path.
 
         Args:
-            conn: SQLite connection object
+            db_path: Path to the SQLite database file
         """
-        self.conn = conn
-        logger.debug("ChatHistory initialized")
+        self.db_path = Path(db_path)
+        self.conn = sqlite3.connect(str(self.db_path))
+        self._init_db()
+        logger.debug(f"ChatHistory initialized with db={self.db_path}")
+
+    def _init_db(self) -> None:
+        """Initialize the chat_history table and index."""
+        self.conn.execute("""
+            CREATE TABLE IF NOT EXISTS chat_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id TEXT NOT NULL,
+                question TEXT NOT NULL,
+                answer TEXT NOT NULL,
+                sources TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        self.conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_session ON chat_history(session_id)"
+        )
+        self.conn.commit()
 
     def save(
         self,

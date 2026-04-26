@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Optional, Tuple
 
 from src.history import ChatHistory
-from src.registry import SourceRegistry
 from src.services.llm_provider import LLMProvider, OllamaProvider
 
 logger = logging.getLogger(__name__)
@@ -19,13 +18,13 @@ class ChatService:
         self,
         wiki_dir: Path,
         indexer,
-        registry: SourceRegistry,
+        history: ChatHistory,
         llm_provider: Optional[LLMProvider] = None,
     ):
         self.wiki_dir = Path(wiki_dir)
         self.indexer = indexer
         self.llm_provider = llm_provider or OllamaProvider()
-        self.history = ChatHistory(registry.conn)
+        self.history = history
         logger.debug(f"ChatService initialized with wiki_dir={wiki_dir}, llm_provider={type(self.llm_provider).__name__}")
 
     def chat(self, session_id: str, question: str, top_k: int = 5) -> Tuple[str, list[dict]]:

@@ -3,7 +3,6 @@
 import hashlib
 import json
 import logging
-import sqlite3
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
@@ -87,26 +86,8 @@ class SourceRegistry:
         self.registry_path = Path(registry_path)
         self._data: dict = {"sources": [], "wiki_pages": {}, "last_updated": None}
         self._sources: dict[str, SourceEntry] = {}
-        self.db_path = registry_path.parent / "chat_history.db"
-        self.conn = sqlite3.connect(str(self.db_path))
         logger.debug(f"Initializing SourceRegistry: {registry_path}")
-        self._init_db()
         self._load()
-
-    def _init_db(self) -> None:
-        """Initialize SQLite database tables."""
-        self.conn.execute("""
-            CREATE TABLE IF NOT EXISTS chat_history (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                session_id TEXT NOT NULL,
-                question TEXT NOT NULL,
-                answer TEXT NOT NULL,
-                sources TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        self.conn.execute("CREATE INDEX IF NOT EXISTS idx_session ON chat_history(session_id)")
-        self.conn.commit()
 
     def _load(self) -> None:
         """Load registry from disk or create empty."""
