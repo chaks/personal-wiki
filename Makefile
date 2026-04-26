@@ -1,6 +1,7 @@
 PYTHON := .venv/bin/python
 PIP := .venv/bin/pip
 PYTEST := .venv/bin/pytest
+PYTHON_VERSION := 3.12
 
 QDRANT_PORT := 6333
 OLLAMA_PORT := 11434
@@ -19,7 +20,7 @@ help:  ## List all commands
 # ── Setup ────────────────────────────────────────────────────────────────────
 
 setup:  ## Create venv and install dependencies
-	python3 -m venv .venv
+	python$(PYTHON_VERSION) -m venv .venv
 	$(PIP) install --upgrade pip
 	$(PIP) install -r requirements.txt
 
@@ -34,7 +35,7 @@ run-dev:  ## Start the server (debug log level)
 	$(PYTHON) -m src --host $(or $(HOST),0.0.0.0) --port $(or $(PORT),8000) --log-level DEBUG 2>&1 $(LOG_VIEWER)
 
 ingest:  ## Run the document ingestion pipeline
-	$(PYTHON) -m src.ingest
+	$(PYTHON) -m src.ingest 2>&1 $(LOG_VIEWER)
 
 lint-wiki:  ## Check wiki pages for broken links and orphans
 	$(PYTHON) -m src --lint
