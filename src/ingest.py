@@ -16,6 +16,8 @@ setup_logging(log_dir=root / "logs", level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 from src.ingestion import DoclingIngestor
+from src.ingestion.adapters import PDFSourceAdapter, URLSourceAdapter, CodeSourceAdapter
+from src.ingestion_result import IngestionResult
 from src.registry import SourceRegistry, SourceStatus
 
 
