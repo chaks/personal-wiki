@@ -5,9 +5,6 @@ from src.ingestion.adapters import (
     URLSourceAdapter,
     CodeSourceAdapter,
 )
-from src.ingestion.url_ingestor import URLIngestor
-from src.ingestion.code_ingestor import CodeIngestor
-from src.docling_ingestor import DoclingIngestor, DoclingIngestPipeline
 from src.ingestion_result import IngestionResult
 
 __all__ = [
@@ -16,8 +13,4 @@ __all__ = [
     "PDFSourceAdapter",
     "URLSourceAdapter",
     "CodeSourceAdapter",
-    "URLIngestor",
-    "CodeIngestor",
-    "DoclingIngestor",
-    "DoclingIngestPipeline",
 ]

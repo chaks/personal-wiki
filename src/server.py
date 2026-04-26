@@ -35,6 +35,18 @@ class HealthResponse(BaseModel):
     qdrant_error: Optional[str] = None
 
 
+def _static_file_handler(static_dir: Path, filename: str):
+    """Return an async handler that serves a static file."""
+    async def handler():
+        file_path = static_dir / filename
+        if not file_path.exists():
+            logger.error(f"{filename} not found at {file_path}")
+            raise HTTPException(status_code=404, detail=f"{filename} not found")
+        logger.debug(f"Serving {filename}")
+        return FileResponse(file_path)
+    return handler
+
+
 def create_app(
     wiki_dir: Path,
     state_dir: Path,
@@ -92,28 +104,24 @@ def create_app(
     if embedding_provider is None:
         embedding_provider = OllamaEmbeddingProvider()
 
-    # Register source management routes
-    app.include_router(manage_router)
-
-    # Register wiki browsing routes
-    app.include_router(browse_router)
-
+    # Instantiate services once at startup
     indexer = WikiIndexer(wiki_dir, vector_store=vector_store, embedding_provider=embedding_provider, llm_provider=llm_provider)
     chat_engine = ChatEngine(wiki_dir, indexer, llm_provider=llm_provider)
-    logger.info("Initialized WikiIndexer and ChatEngine with injected services")
+    health_service = HealthService(
+        ollama_provider=llm_provider,
+        vector_store=vector_store,
+        qdrant_url=qdrant_url,
+    )
+    logger.info("Initialized WikiIndexer, ChatEngine, and HealthService")
+
+    app.include_router(manage_router)
+    app.include_router(browse_router)
 
     static_dir.mkdir(parents=True, exist_ok=True)
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
-    logger.info("Mounted static files at /static")
 
     @app.get("/health", response_model=HealthResponse)
     async def health_check():
-        logger.debug("Health check requested")
-        health_service = HealthService(
-            ollama_provider=llm_provider,
-            vector_store=vector_store,
-            qdrant_url=qdrant_url
-        )
         status = health_service.check_all()
         return HealthResponse(
             ollama=status.ollama.value,
@@ -139,32 +147,14 @@ def create_app(
             media_type="text/event-stream",
         )
 
-    @app.get("/")
-    async def serve_index():
-        index_path = static_dir / "index.html"
-        if not index_path.exists():
-            logger.error(f"index.html not found at {index_path}")
-            raise HTTPException(status_code=404, detail="index.html not found")
-        logger.debug("Serving index.html")
-        return FileResponse(index_path)
+    serve_index = _static_file_handler(static_dir, "index.html")
+    app.get("/")(serve_index)
 
-    @app.get("/manage")
-    async def serve_manage():
-        manage_path = static_dir / "manage.html"
-        if not manage_path.exists():
-            logger.error(f"manage.html not found at {manage_path}")
-            raise HTTPException(status_code=404, detail="manage.html not found")
-        logger.debug("Serving manage.html")
-        return FileResponse(manage_path)
+    serve_manage = _static_file_handler(static_dir, "manage.html")
+    app.get("/manage")(serve_manage)
 
-    @app.get("/browse")
-    async def serve_browse():
-        browse_path = static_dir / "browse.html"
-        if not browse_path.exists():
-            logger.error(f"browse.html not found at {browse_path}")
-            raise HTTPException(status_code=404, detail="browse.html not found")
-        logger.debug("Serving browse.html")
-        return FileResponse(browse_path)
+    serve_browse = _static_file_handler(static_dir, "browse.html")
+    app.get("/browse")(serve_browse)
 
     logger.info("FastAPI application created successfully")
     return app

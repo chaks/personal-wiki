@@ -1,4 +1,4 @@
-"""Tests for Docling ingestion pipeline."""
+"""Tests for PDFSourceAdapter."""
 import pytest
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -28,42 +28,54 @@ def temp_wiki_dir(tmp_path):
     return wiki_dir
 
 
-def test_ingestor_initializes(temp_source, temp_output_dir, temp_wiki_dir):
-    """Ingestor initializes with source and output paths."""
-    from src.docling_ingestor import DoclingIngestor
-    ingestor = DoclingIngestor(temp_source, temp_output_dir, wiki_dir=temp_wiki_dir)
-    assert ingestor.source_path == temp_source
-    assert ingestor.output_dir == temp_output_dir
-    assert ingestor.wiki_dir == temp_wiki_dir
+def test_adapter_initializes(temp_source, temp_output_dir, temp_wiki_dir):
+    """PDFSourceAdapter initializes with source and output paths."""
+    from src.ingestion.adapters import PDFSourceAdapter
+    adapter = PDFSourceAdapter(
+        source_path=temp_source,
+        wiki_dir=temp_wiki_dir,
+        output_dir=temp_output_dir,
+    )
+    assert adapter.source_path == temp_source
+    assert adapter.output_dir == temp_output_dir
+    assert adapter.wiki_dir == temp_wiki_dir
 
 
 @patch("src.pipeline.stages.DocumentConverter")
-def test_ingest_returns_markdown(mock_converter, temp_source, temp_output_dir, temp_wiki_dir):
-    """Ingest converts source to markdown."""
-    from src.docling_ingestor import DoclingIngestor
+def test_adapter_runs_pipeline(mock_converter, temp_source, temp_output_dir, temp_wiki_dir):
+    """PDFSourceAdapter.run() converts source and returns IngestionResult."""
+    from src.ingestion.adapters import PDFSourceAdapter
     mock_instance = Mock()
     mock_result = Mock()
     mock_result.document.export_to_markdown.return_value = "# Converted\n\nMarkdown content"
     mock_instance.convert.return_value = mock_result
     mock_converter.return_value = mock_instance
 
-    ingestor = DoclingIngestor(temp_source, temp_output_dir, wiki_dir=temp_wiki_dir)
-    result = ingestor.ingest()
+    adapter = PDFSourceAdapter(
+        source_path=temp_source,
+        wiki_dir=temp_wiki_dir,
+        output_dir=temp_output_dir,
+    )
+    result = adapter.run()
 
     assert result.success is True
     assert result.output_path == temp_output_dir / "test_source.md"
 
 
 @patch("src.pipeline.stages.DocumentConverter")
-def test_ingest_handles_failure(mock_converter, temp_source, temp_output_dir, temp_wiki_dir):
-    """Ingest handles conversion failures gracefully."""
-    from src.docling_ingestor import DoclingIngestor
+def test_adapter_handles_failure(mock_converter, temp_source, temp_output_dir, temp_wiki_dir):
+    """PDFSourceAdapter.run() returns failure on conversion error."""
+    from src.ingestion.adapters import PDFSourceAdapter
     mock_instance = Mock()
     mock_instance.convert.side_effect = Exception("Conversion failed")
     mock_converter.return_value = mock_instance
 
-    ingestor = DoclingIngestor(temp_source, temp_output_dir, wiki_dir=temp_wiki_dir)
-    result = ingestor.ingest()
+    adapter = PDFSourceAdapter(
+        source_path=temp_source,
+        wiki_dir=temp_wiki_dir,
+        output_dir=temp_output_dir,
+    )
+    result = adapter.run()
 
     assert result.success is False
     assert "Conversion failed" in result.error
@@ -74,13 +86,13 @@ def test_ingest_handles_failure(mock_converter, temp_source, temp_output_dir, te
 @patch("src.pipeline.stages.WikiPageWriter")
 @patch("src.pipeline.stages.EntityExtractor")
 @patch("src.pipeline.stages.DocumentConverter")
-def test_ingest_extracts_entities_and_concepts(
+def test_adapter_extracts_entities_and_concepts(
     mock_converter, mock_extractor_class, mock_writer_class,
     mock_resolver_class, mock_indexer_class,
     temp_source, temp_output_dir, temp_wiki_dir
 ):
-    """Ingest extracts entities and concepts after conversion."""
-    from src.docling_ingestor import DoclingIngestor
+    """PDFSourceAdapter.run() extracts entities and concepts after conversion."""
+    from src.ingestion.adapters import PDFSourceAdapter
     mock_instance = Mock()
     mock_result = Mock()
     mock_result.document.export_to_markdown.return_value = "# Test\n\nContent"
@@ -105,8 +117,12 @@ def test_ingest_extracts_entities_and_concepts(
     mock_indexer.index_page.return_value = None
     mock_indexer_class.return_value = mock_indexer
 
-    ingestor = DoclingIngestor(temp_source, temp_output_dir, wiki_dir=temp_wiki_dir)
-    result = ingestor.ingest()
+    adapter = PDFSourceAdapter(
+        source_path=temp_source,
+        wiki_dir=temp_wiki_dir,
+        output_dir=temp_output_dir,
+    )
+    result = adapter.run()
 
     assert result.success is True
     mock_extractor.extract.assert_called_once()

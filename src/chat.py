@@ -4,57 +4,9 @@ import logging
 from pathlib import Path
 from typing import Optional, Tuple
 
-from src.history import ChatHistory
 from src.services.llm_provider import LLMProvider, OllamaProvider
 
 logger = logging.getLogger(__name__)
-
-
-class ChatService:
-    """Chat service with history persistence."""
-
-    def __init__(
-        self,
-        wiki_dir: Path,
-        indexer,
-        history: ChatHistory,
-        llm_provider: Optional[LLMProvider] = None,
-    ):
-        self.wiki_dir = Path(wiki_dir)
-        self.indexer = indexer
-        self.llm_provider = llm_provider or OllamaProvider()
-        self.history = history
-        logger.debug(f"ChatService initialized with wiki_dir={wiki_dir}, llm_provider={type(self.llm_provider).__name__}")
-
-    def chat(self, session_id: str, question: str, top_k: int = 5) -> Tuple[str, list[dict]]:
-        """Process a chat query and save to history.
-
-        Args:
-            session_id: Unique identifier for the chat session
-            question: The user's question
-            top_k: Number of context pages to retrieve
-
-        Returns:
-            Tuple of (answer, context_pages)
-        """
-        logger.info(f"Chat request for session {session_id}: {question[:50]}...")
-
-        # Search for relevant context
-        context_pages = self.indexer.search(question, top_k) if self.indexer else []
-
-        from src.prompt import build_rag_prompt
-
-        system, user_prompt = build_rag_prompt(context_pages, question)
-
-        logger.debug(f"Sending prompt to LLM ({len(user_prompt)} chars)")
-        answer = self.llm_provider.generate(user_prompt, system=system) if hasattr(self.llm_provider, 'generate') else self.llm_provider.generate_stream(user_prompt, system=system)
-        logger.info(f"Received answer from LLM ({len(answer)} chars)")
-
-        # Save to history
-        sources = [p.get("path", "") for p in context_pages]
-        self.history.save(session_id, question, answer, sources)
-
-        return answer, context_pages
 
 
 class ChatEngine:

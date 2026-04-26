@@ -1,15 +1,15 @@
-"""Tests for CodeIngestor (thin wrapper around CodeSourceAdapter)."""
+"""Tests for CodeSourceAdapter."""
 import pytest
 from unittest.mock import patch
 from pathlib import Path
 import tempfile
-from src.ingestion.code_ingestor import CodeIngestor
+from src.ingestion.adapters import CodeSourceAdapter
 from src.ingestion_result import IngestionResult
 
 
 @patch("src.ingestion.adapters.CodeSourceAdapter.run")
-def test_code_ingestor_delegates_to_adapter(mock_run):
-    """CodeIngestor.ingest() delegates to CodeSourceAdapter.run()."""
+def test_code_adapter_delegates_to_pipeline(mock_run):
+    """CodeSourceAdapter.run() builds and runs the pipeline."""
     mock_run.return_value = IngestionResult(
         success=True,
         output_path=Path("/tmp/code.md"),
@@ -21,8 +21,8 @@ def test_code_ingestor_delegates_to_adapter(mock_run):
         wiki_dir = Path(tmpdir) / "wiki"
         wiki_dir.mkdir()
 
-        ingestor = CodeIngestor(code_dir=code_dir, wiki_dir=wiki_dir, language="python")
-        result = ingestor.ingest()
+        adapter = CodeSourceAdapter(code_dir=code_dir, wiki_dir=wiki_dir, language="python")
+        result = adapter.run()
 
         assert result.success is True
         assert result.output_path == Path("/tmp/code.md")
@@ -30,8 +30,8 @@ def test_code_ingestor_delegates_to_adapter(mock_run):
 
 
 @patch("src.ingestion.adapters.CodeSourceAdapter.run")
-def test_code_ingestor_returns_failure(mock_run):
-    """CodeIngestor propagates adapter failures."""
+def test_code_adapter_returns_failure(mock_run):
+    """CodeSourceAdapter.run() returns failure on scan error."""
     mock_run.return_value = IngestionResult(
         success=False,
         output_path=None,
@@ -44,8 +44,8 @@ def test_code_ingestor_returns_failure(mock_run):
         wiki_dir = Path(tmpdir) / "wiki"
         wiki_dir.mkdir()
 
-        ingestor = CodeIngestor(code_dir=code_dir, wiki_dir=wiki_dir, language="python")
-        result = ingestor.ingest()
+        adapter = CodeSourceAdapter(code_dir=code_dir, wiki_dir=wiki_dir, language="python")
+        result = adapter.run()
 
         assert result.success is False
         assert "Scan failed" in result.error
