@@ -27,11 +27,11 @@ class TestAsyncLLMProvider:
 
     @pytest.mark.asyncio
     async def test_ollama_provider_generate_stream_async(self):
-        """OllamaProvider streams text asynchronously via ollama.generate."""
+        """OllamaProvider streams text asynchronously via ollama.chat."""
         def sync_gen():
-            yield {"response": "chunk1"}
-            yield {"response": "chunk2"}
-            yield {"response": "chunk3"}
+            yield {"message": {"content": "chunk1"}}
+            yield {"message": {"content": "chunk2"}}
+            yield {"message": {"content": "chunk3"}}
 
         with patch("src.services.llm_provider.asyncio.get_event_loop") as mock_loop:
             mock_loop.return_value.run_in_executor = AsyncMock(return_value=sync_gen())

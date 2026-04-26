@@ -11,20 +11,20 @@ class MockLLMProvider(LLMProvider):
         self.response = response
         self.call_count = 0
 
-    def generate(self, prompt: str) -> str:
+    def generate(self, prompt: str, system: str | None = None) -> str:
         self.call_count += 1
         return self.response
 
-    def generate_stream(self, prompt: str):
+    def generate_stream(self, prompt: str, system: str | None = None):
         yield self.response
 
     def health_check(self) -> bool:
         return True
 
-    async def generate_async(self, prompt: str) -> str:
+    async def generate_async(self, prompt: str, system: str | None = None) -> str:
         return self.response
 
-    async def generate_stream_async(self, prompt: str):
+    async def generate_stream_async(self, prompt: str, system: str | None = None):
         yield self.response
 
 

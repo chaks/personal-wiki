@@ -23,11 +23,12 @@ class LLMProvider(ABC):
         pass
 
     @abstractmethod
-    def generate_stream(self, prompt: str) -> Iterator[str]:
+    def generate_stream(self, prompt: str, system: Optional[str] = None) -> Iterator[str]:
         """Stream a completion for the given prompt.
 
         Args:
             prompt: The input prompt
+            system: Optional system message for chat-based streaming
 
         Yields:
             Text chunks as they are generated
@@ -44,11 +45,12 @@ class LLMProvider(ABC):
         pass
 
     @abstractmethod
-    async def generate_async(self, prompt: str) -> str:
+    async def generate_async(self, prompt: str, system: Optional[str] = None) -> str:
         """Asynchronously generate a completion for the given prompt.
 
         Args:
             prompt: The input prompt
+            system: Optional system message for chat-based generation
 
         Returns:
             Generated text response
@@ -56,11 +58,12 @@ class LLMProvider(ABC):
         pass
 
     @abstractmethod
-    async def generate_stream_async(self, prompt: str) -> AsyncIterator[str]:
+    async def generate_stream_async(self, prompt: str, system: Optional[str] = None) -> AsyncIterator[str]:
         """Asynchronously stream a completion for the given prompt.
 
         Args:
             prompt: The input prompt
+            system: Optional system message for chat-based streaming
 
         Yields:
             Text chunks as they are generated
@@ -99,14 +102,25 @@ class OllamaProvider(LLMProvider):
         content = response.get("message", {}).get("content", "")
         return content or ""
 
-    def generate_stream(self, prompt: str) -> Iterator[str]:
-        """Stream completion using ollama.generate."""
+    def generate_stream(self, prompt: str, system: Optional[str] = None) -> Iterator[str]:
+        """Stream completion using ollama.chat."""
         import ollama
 
         logger.debug(f"Streaming with model={self.model}, prompt_len={len(prompt)}")
-        stream = ollama.generate(model=self.model, prompt=prompt, stream=True)
+        if system:
+            messages = [
+                {"role": "system", "content": system},
+                {"role": "user", "content": prompt},
+            ]
+        else:
+            messages = [{"role": "user", "content": prompt}]
+        stream = ollama.chat(
+            model=self.model,
+            messages=messages,
+            stream=True,
+        )
         for chunk in stream:
-            response = chunk.get("response", "")
+            response = chunk.get("message", {}).get("content", "")
             if response:
                 yield response
 
@@ -121,33 +135,48 @@ class OllamaProvider(LLMProvider):
             logger.error(f"Ollama health check failed: {e}")
             return False
 
-    async def generate_async(self, prompt: str) -> str:
+    async def generate_async(self, prompt: str, system: Optional[str] = None) -> str:
         """Generate completion asynchronously using ollama.chat."""
         import ollama
 
         logger.debug(f"Async generating with model={self.model}, prompt_len={len(prompt)}")
-        # ollama doesn't have native async support, so we use asyncio.to_thread
+        if system:
+            messages = [
+                {"role": "system", "content": system},
+                {"role": "user", "content": prompt},
+            ]
+        else:
+            messages = [{"role": "user", "content": prompt}]
         response = await asyncio.to_thread(
             ollama.chat,
             model=self.model,
-            messages=[{"role": "user", "content": prompt}]
+            messages=messages,
         )
         content = response.get("message", {}).get("content", "")
         return content or ""
 
-    async def generate_stream_async(self, prompt: str) -> AsyncIterator[str]:
-        """Stream completion asynchronously using ollama.generate."""
+    async def generate_stream_async(self, prompt: str, system: Optional[str] = None) -> AsyncIterator[str]:
+        """Stream completion asynchronously using ollama.chat."""
         import ollama
 
         logger.debug(f"Async streaming with model={self.model}, prompt_len={len(prompt)}")
-        # ollama doesn't have native async support, so we use asyncio.to_thread
-        # We need to run the streaming in a thread and yield results
+        if system:
+            messages = [
+                {"role": "system", "content": system},
+                {"role": "user", "content": prompt},
+            ]
+        else:
+            messages = [{"role": "user", "content": prompt}]
         loop = asyncio.get_event_loop()
         stream = await loop.run_in_executor(
             None,
-            lambda: ollama.generate(model=self.model, prompt=prompt, stream=True)
+            lambda: ollama.chat(
+                model=self.model,
+                messages=messages,
+                stream=True,
+            ),
         )
         for chunk in stream:
-            response = chunk.get("response", "")
+            response = chunk.get("message", {}).get("content", "")
             if response:
                 yield response

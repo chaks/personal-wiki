@@ -20,11 +20,11 @@ def test_ollama_provider_generate():
 
 
 def test_ollama_provider_generate_stream():
-    """OllamaProvider streams via ollama.generate."""
-    with patch("ollama.generate") as mock_generate:
-        mock_generate.return_value = iter([
-            {"response": "chunk1"},
-            {"response": "chunk2"},
+    """OllamaProvider streams via ollama.chat."""
+    with patch("ollama.chat") as mock_chat:
+        mock_chat.return_value = iter([
+            {"message": {"content": "chunk1"}},
+            {"message": {"content": "chunk2"}},
         ])
 
         provider = OllamaProvider(model="gemma4:e2b")

@@ -1,6 +1,5 @@
 # src/chat.py
 """Chat query handling with RAG."""
-import html
 import logging
 from pathlib import Path
 from typing import Optional, Tuple
@@ -43,24 +42,12 @@ class ChatService:
         # Search for relevant context
         context_pages = self.indexer.search(question, top_k) if self.indexer else []
 
-        context_text = "\n\n".join(
-            f"=== {p['path']} ===\n{p['content']}" for p in context_pages
-        )
+        from src.prompt import build_rag_prompt
 
-        # Sanitize user input to prevent prompt injection attacks
-        sanitized_message = html.escape(question.strip())
+        system, user_prompt = build_rag_prompt(context_pages, question)
 
-        prompt = f"""You are a helpful assistant answering questions based on a personal knowledge wiki.
-
-Context from wiki:
-{context_text}
-
-Question: {sanitized_message}
-
-Answer based on the context above. If the context doesn't contain relevant information, say so."""
-
-        logger.debug(f"Sending prompt to LLM ({len(prompt)} chars)")
-        answer = self.llm_provider.generate(prompt) if hasattr(self.llm_provider, 'generate') else self.llm_provider.generate_stream(prompt)
+        logger.debug(f"Sending prompt to LLM ({len(user_prompt)} chars)")
+        answer = self.llm_provider.generate(user_prompt, system=system) if hasattr(self.llm_provider, 'generate') else self.llm_provider.generate_stream(user_prompt, system=system)
         logger.info(f"Received answer from LLM ({len(answer)} chars)")
 
         # Save to history
@@ -152,24 +139,12 @@ class ChatEngine:
             logger.error(f"Search failed: {e}")
             context_pages = []
 
-        context_text = "\n\n".join(
-            f"=== {p['path']} ===\n{p['content']}" for p in context_pages
-        )
+        from src.prompt import build_rag_prompt
 
-        # Sanitize user input to prevent prompt injection attacks
-        sanitized_message = html.escape(query.strip())
+        system, user_prompt = build_rag_prompt(context_pages, query)
 
-        prompt = f"""You are a helpful assistant answering questions based on a personal knowledge wiki.
-
-Context from wiki:
-{context_text}
-
-Question: {sanitized_message}
-
-Answer based on the context above. If the context doesn't contain relevant information, say so."""
-
-        logger.debug(f"Sending prompt to LLM ({len(prompt)} chars)")
-        answer = await self.llm_provider.generate_async(prompt)
+        logger.debug(f"Sending prompt to LLM ({len(user_prompt)} chars)")
+        answer = await self.llm_provider.generate_async(user_prompt, system=system)
         logger.info(f"Received answer from LLM ({len(answer)} chars)")
 
         return answer, context_pages

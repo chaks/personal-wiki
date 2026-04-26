@@ -34,21 +34,21 @@ class MockAsyncLLMProvider(LLMProvider):
         self.generate_calls = []
         self.generate_stream_calls = []
 
-    def generate(self, prompt: str) -> str:
+    def generate(self, prompt: str, system: str | None = None) -> str:
         return "sync response"
 
-    def generate_stream(self, prompt: str):
+    def generate_stream(self, prompt: str, system: str | None = None):
         yield "sync chunk"
 
     def health_check(self) -> bool:
         return True
 
-    async def generate_async(self, prompt: str) -> str:
-        self.generate_calls.append(prompt)
+    async def generate_async(self, prompt: str, system: str | None = None) -> str:
+        self.generate_calls.append((prompt, system))
         return "async LLM response"
 
-    async def generate_stream_async(self, prompt: str):
-        self.generate_stream_calls.append(prompt)
+    async def generate_stream_async(self, prompt: str, system: str | None = None):
+        self.generate_stream_calls.append((prompt, system))
         yield "async chunk 1"
         yield "async chunk 2"
 
@@ -138,10 +138,10 @@ class TestAsyncChatEngine:
         await engine.query_async("test question", top_k=3)
 
         assert len(mock_llm.generate_calls) == 1
-        prompt = mock_llm.generate_calls[0]
+        prompt, sys_prompt = mock_llm.generate_calls[0]
         assert "test question" in prompt
         assert "Chat engine test content" in prompt
-        assert "You are a helpful assistant" in prompt
+        assert "helpful assistant" in sys_prompt
 
     @pytest.mark.asyncio
     async def test_search_async_keyword_fallback(self, wiki_dir):

@@ -169,7 +169,7 @@ async def stream_chat_response(
     chat_engine,
 ) -> AsyncGenerator[str, None]:
     """Stream chat response as SSE events."""
-    import html
+    from src.prompt import build_rag_prompt
 
     logger.debug(f"Searching wiki for: {message[:50]}...")
     start_time = time.time()
@@ -180,24 +180,10 @@ async def stream_chat_response(
         f"Search completed in {search_duration:.3f}s, found {len(context_pages)} pages"
     )
 
-    context_text = "\n\n".join(
-        f"=== {p['path']} ===\n{p['content']}" for p in context_pages
-    )
+    system, user_prompt = build_rag_prompt(context_pages, message)
 
-    # Sanitize user input to prevent prompt injection attacks
-    sanitized_message = html.escape(message.strip())
-
-    prompt = f"""You are a helpful assistant answering questions based on a personal knowledge wiki.
-
-Context from wiki:
-{context_text}
-
-Question: {sanitized_message}
-
-Answer based on the context above. If the context doesn't contain relevant information, say so."""
-
-    logger.debug(f"Sending prompt to LLM ({len(prompt)} chars)")
-    stream = chat_engine.llm_provider.generate_stream(prompt)
+    logger.debug(f"Sending prompt to LLM ({len(user_prompt)} chars)")
+    stream = chat_engine.llm_provider.generate_stream(user_prompt, system=system)
 
     chunk_count = 0
     for response_text in stream:
@@ -214,7 +200,7 @@ async def stream_chat_response_async(
     chat_engine,
 ) -> AsyncGenerator[str, None]:
     """Stream chat response as SSE events using async methods."""
-    import html
+    from src.prompt import build_rag_prompt
 
     logger.debug(f"Async searching wiki for: {message[:50]}...")
     start_time = time.time()
@@ -225,24 +211,10 @@ async def stream_chat_response_async(
         f"Async search completed in {search_duration:.3f}s, found {len(context_pages)} pages"
     )
 
-    context_text = "\n\n".join(
-        f"=== {p['path']} ===\n{p['content']}" for p in context_pages
-    )
+    system, user_prompt = build_rag_prompt(context_pages, message)
 
-    # Sanitize user input to prevent prompt injection attacks
-    sanitized_message = html.escape(message.strip())
-
-    prompt = f"""You are a helpful assistant answering questions based on a personal knowledge wiki.
-
-Context from wiki:
-{context_text}
-
-Question: {sanitized_message}
-
-Answer based on the context above. If the context doesn't contain relevant information, say so."""
-
-    logger.debug(f"Sending prompt to LLM ({len(prompt)} chars)")
-    stream = chat_engine.llm_provider.generate_stream_async(prompt)
+    logger.debug(f"Sending prompt to LLM ({len(user_prompt)} chars)")
+    stream = chat_engine.llm_provider.generate_stream_async(user_prompt, system=system)
 
     chunk_count = 0
     async for response_text in stream:
