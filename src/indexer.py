@@ -126,21 +126,6 @@ class WikiIndexer:
                 },
             })
 
-        if len(chunks) > 1:
-            overview = content[:2000]
-            overview_embedding = await self.llm_provider.embed_async(overview)
-            points.append({
-                "id": page_id,
-                "vector": overview_embedding,
-                "payload": {
-                    "path": rel_path,
-                    "content": overview,
-                    "title": title,
-                    "chunk_index": -1,
-                    "total_chunks": len(chunks),
-                },
-            })
-
         await self.vector_store.upsert(
             collection_name=self.COLLECTION_NAME,
             points=points,
@@ -188,7 +173,7 @@ class WikiIndexer:
             self.vector_store = QdrantStore(url="http://localhost:6333")
         return asyncio.run(self.index_all_wiki_pages_async())
 
-    async def search_async(self, query: str, top_k: int = 5) -> list[dict]:
+    async def search_async(self, query: str, top_k: int = 10) -> list[dict]:
         """Asynchronously search for relevant wiki pages."""
         if self.vector_store is None:
             self.vector_store = QdrantStore(url="http://localhost:6333")
@@ -196,24 +181,29 @@ class WikiIndexer:
         logger.info(f"Async searching wiki for: {query[:50]}... (top_k={top_k})")
         query_embedding = await self.llm_provider.embed_async(query)
 
-        results = await self.vector_store.search(
+        # Fetch 3x to account for multi-chunk pages returning duplicate paths
+        raw_results = await self.vector_store.search(
             collection_name=self.COLLECTION_NAME,
             query_vector=query_embedding,
-            limit=top_k
+            limit=top_k * 3
         )
 
-        result_dicts = [
-            {
-                "path": hit.payload["path"],
-                "content": hit.payload["content"],
-                "score": hit.score,
-            }
-            for hit in results
-        ]
+        # Deduplicate by path, keeping the best score per document
+        best = {}
+        for hit in raw_results:
+            path = hit.payload["path"]
+            if path not in best or hit.score > best[path]["score"]:
+                best[path] = {
+                    "path": path,
+                    "content": hit.payload["content"],
+                    "score": hit.score,
+                }
+
+        result_dicts = sorted(best.values(), key=lambda r: r["score"], reverse=True)[:top_k]
         logger.info(f"Async search returned {len(result_dicts)} results")
         return result_dicts
 
-    def search(self, query: str, top_k: int = 5) -> list[dict]:
+    def search(self, query: str, top_k: int = 10) -> list[dict]:
         """Synchronously search for relevant wiki pages (legacy wrapper)."""
         if self.vector_store is None:
             self.vector_store = QdrantStore(url="http://localhost:6333")
