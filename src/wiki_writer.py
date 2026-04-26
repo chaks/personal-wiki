@@ -98,6 +98,10 @@ class WikiPageWriter:
             logger.error(f"Failed to write concept page for '{concept.name}': {e}")
             return None
 
+    def _slugify(self, name: str) -> str:
+        """Convert name to safe filename."""
+        return slugify(name)
+
     def _format_entity_page(self, entity: Entity) -> str:
         """Format entity as wiki page with frontmatter.
 

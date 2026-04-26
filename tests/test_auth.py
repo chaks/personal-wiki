@@ -148,7 +148,10 @@ class TestApiKeyAuthMiddleware:
         with TestClient(app) as client:
             response = client.get("/health", headers={"X-API-Key": valid_api_key})
             assert response.status_code == 200
-            assert response.json() == {"status": "ok"}
+            data = response.json()
+            assert "ollama" in data
+            assert "qdrant" in data
+            assert "is_healthy" in data
 
     def test_excluded_paths_bypass_auth_health(self, test_dirs):
         """Excluded paths like /health bypass authentication."""
