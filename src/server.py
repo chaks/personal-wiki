@@ -171,6 +171,10 @@ async def stream_chat_response(
     """Stream chat response as SSE events."""
     from src.prompt import build_rag_prompt
 
+    # Yield ping immediately so the SSE connection is established
+    # and the browser's typing indicator stays visible during search.
+    yield ": ping\n\n"
+
     logger.debug(f"Searching wiki for: {message[:50]}...")
     start_time = time.time()
     context_pages = await chat_engine.search_async(message)

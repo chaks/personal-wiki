@@ -83,8 +83,6 @@ async function handleChat(message) {
         const reader = stream.getReader();
         const decoder = new TextDecoder();
 
-        assistantMessage.innerHTML = '';
-
         while (true) {
             const { done, value } = await reader.read();
             if (done) break;
@@ -93,6 +91,8 @@ async function handleChat(message) {
             const lines = chunk.split('\n');
 
             for (const line of lines) {
+                if (line.startsWith(':')) continue; // SSE comment (ping)
+
                 if (line.startsWith('data: ')) {
                     const data = line.slice(6);
                     if (data === '[DONE]') continue;
@@ -100,6 +100,9 @@ async function handleChat(message) {
                     try {
                         const parsed = JSON.parse(data);
                         if (parsed.text) {
+                            if (!fullResponse) {
+                                assistantMessage.innerHTML = '';
+                            }
                             fullResponse += parsed.text;
                             assistantMessage.innerHTML = renderMarkdown(fullResponse);
                             messagesContainer.scrollTop = messagesContainer.scrollHeight;
