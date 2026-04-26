@@ -5,6 +5,9 @@ PYTEST := .venv/bin/pytest
 QDRANT_PORT := 6333
 OLLAMA_PORT := 11434
 
+TSPIN := $(shell command -v tspin 2>/dev/null)
+LOG_VIEWER := $(if $(TSPIN),| $(TSPIN),)
+
 .PHONY: help setup install run run-dev ingest lint-wiki test test-cov clean \
         qdrant-start qdrant-stop qdrant-status qdrant-logs \
         qdrant-backup qdrant-restore qdrant-create-collection qdrant-wipe \
@@ -25,10 +28,10 @@ install: setup
 # ── App ──────────────────────────────────────────────────────────────────────
 
 run:  ## Start the FastAPI server
-	$(PYTHON) -m src --host $(or $(HOST),0.0.0.0) --port $(or $(PORT),8000) --log-level $(or $(LOG_LEVEL),info)
+	$(PYTHON) -m src --host $(or $(HOST),0.0.0.0) --port $(or $(PORT),8000) --log-level $(or $(LOG_LEVEL),info) 2>&1 $(LOG_VIEWER)
 
 run-dev:  ## Start the server (debug log level)
-	$(PYTHON) -m src --host $(or $(HOST),0.0.0.0) --port $(or $(PORT),8000) --log-level DEBUG
+	$(PYTHON) -m src --host $(or $(HOST),0.0.0.0) --port $(or $(PORT),8000) --log-level DEBUG 2>&1 $(LOG_VIEWER)
 
 ingest:  ## Run the document ingestion pipeline
 	$(PYTHON) -m src.ingest
@@ -57,7 +60,7 @@ qdrant-status:  ## Check Qdrant container status
 	@docker ps --filter name=qdrant --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 
 qdrant-logs:  ## Tail Qdrant logs
-	docker logs -f qdrant
+	docker logs -f qdrant 2>&1 $(LOG_VIEWER)
 
 qdrant-backup:  ## Create a Qdrant snapshot backup (pass SNAP_DIR=/path/to/backup)
 	@docker exec qdrant mkdir -p /qdrant/snapshots
