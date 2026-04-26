@@ -16,6 +16,7 @@ from src.auth import APIKeyAuthMiddleware, load_api_keys_from_env
 from src.middleware import RateLimitMiddleware
 from src.services.health import HealthService
 from src.services.llm_provider import LLMProvider, OllamaProvider
+from src.services.embedding_provider import EmbeddingProvider, OllamaEmbeddingProvider
 from src.services.vector_store import VectorStore, QdrantStore
 
 logger = logging.getLogger(__name__)
@@ -40,6 +41,7 @@ def create_app(
     static_dir: Path,
     qdrant_url: str = "http://localhost:6333",
     llm_provider: Optional[LLMProvider] = None,
+    embedding_provider: Optional[EmbeddingProvider] = None,
     vector_store: Optional[VectorStore] = None,
     api_keys: Optional[Set[str]] = None,
 ) -> FastAPI:
@@ -51,6 +53,7 @@ def create_app(
         static_dir: Path to static files directory
         qdrant_url: Qdrant server URL (used if vector_store not provided)
         llm_provider: LLM provider instance (creates default OllamaProvider if None)
+        embedding_provider: Embedding provider instance (creates default OllamaEmbeddingProvider if None)
         vector_store: Vector store instance (creates default QdrantStore if None)
         api_keys: Set of valid API keys for authentication (None = no auth)
     """
@@ -86,13 +89,16 @@ def create_app(
     if vector_store is None:
         vector_store = QdrantStore(url=qdrant_url)
 
+    if embedding_provider is None:
+        embedding_provider = OllamaEmbeddingProvider()
+
     # Register source management routes
     app.include_router(manage_router)
 
     # Register wiki browsing routes
     app.include_router(browse_router)
 
-    indexer = WikiIndexer(wiki_dir, vector_store=vector_store, llm_provider=llm_provider)
+    indexer = WikiIndexer(wiki_dir, vector_store=vector_store, embedding_provider=embedding_provider, llm_provider=llm_provider)
     chat_engine = ChatEngine(wiki_dir, indexer, llm_provider=llm_provider)
     logger.info("Initialized WikiIndexer and ChatEngine with injected services")
 
@@ -239,8 +245,10 @@ def run_server(
 ):
     """Run the server."""
     import uvicorn
+    from src.config import AppSettings
 
-    # Load API keys from environment
+    settings = AppSettings.from_yaml(wiki_dir.parent / "config" / "settings.yaml")
+
     api_keys = load_api_keys_from_env()
     if api_keys:
         logger.info(f"Loaded {len(api_keys)} API key(s) from environment")
@@ -249,7 +257,15 @@ def run_server(
             "WIKI_API_KEYS environment variable not set - server will run without authentication"
         )
 
-    app = create_app(wiki_dir, state_dir, static_dir, api_keys=api_keys if api_keys else None)
+    app = create_app(
+        wiki_dir=wiki_dir,
+        state_dir=state_dir,
+        static_dir=static_dir,
+        llm_provider=OllamaProvider(model=settings.llm_model),
+        embedding_provider=OllamaEmbeddingProvider(model=settings.embedding_model),
+        qdrant_url=settings.qdrant_url,
+        api_keys=api_keys if api_keys else None,
+    )
     logger.info(f"Starting uvicorn server on {host}:{port}")
     uvicorn.run(app, host=host, port=port)
 

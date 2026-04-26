@@ -147,7 +147,8 @@ def main():
                 logger.info(f"Copied markdown: {source_path.name} -> {output_path}")
 
                 from src.indexer import WikiIndexer
-                indexer = WikiIndexer(wiki_dir)
+                from src.services.embedding_provider import OllamaEmbeddingProvider
+                indexer = WikiIndexer(wiki_dir, embedding_provider=OllamaEmbeddingProvider())
                 indexer.index_page(output_path)
                 logger.info(f"Indexed {output_path} in Qdrant")
                 processed += 1

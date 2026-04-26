@@ -28,12 +28,6 @@ class MockLLMProvider(LLMProvider):
     async def generate_stream_async(self, prompt: str, system: str | None = None):
         yield self.response
 
-    def embed(self, text: str) -> list[float]:
-        return [0.1] * 768
-
-    async def embed_async(self, text: str) -> list[float]:
-        return [0.1] * 768
-
 
 class MockVectorStore(VectorStore):
     async def upsert(self, collection_name: str, points: list[dict]) -> bool:

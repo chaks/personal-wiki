@@ -7,11 +7,11 @@ from pathlib import Path
 from typing import Optional
 
 from src.services.llm_provider import LLMProvider, OllamaProvider
+from src.services.embedding_provider import EmbeddingProvider, OllamaEmbeddingProvider
 from src.services.vector_store import VectorStore, QdrantStore
 
 logger = logging.getLogger(__name__)
 
-EMBEDDING_DIM = 768
 _CHUNK_SIZE = 3000
 
 
@@ -32,10 +32,12 @@ class WikiIndexer:
         self,
         wiki_dir: Path,
         vector_store: Optional[VectorStore] = None,
+        embedding_provider: Optional[EmbeddingProvider] = None,
         llm_provider: Optional[LLMProvider] = None,
     ):
         self.wiki_dir = Path(wiki_dir)
         self.vector_store = vector_store
+        self.embedding_provider = embedding_provider or OllamaEmbeddingProvider()
         self.llm_provider = llm_provider or OllamaProvider()
         logger.debug(f"WikiIndexer initialized: wiki_dir={wiki_dir}, vector_store={type(vector_store).__name__ if vector_store else 'QdrantStore'}")
 
@@ -110,7 +112,7 @@ class WikiIndexer:
 
         points = []
         for i, chunk in enumerate(chunks):
-            chunk_embedding = await self.llm_provider.embed_async(chunk)
+            chunk_embedding = await self.embedding_provider.embed_async(chunk)
             cid = self._chunk_id(page_path, i)
             point_id = page_id if len(chunks) == 1 else cid
 
@@ -179,7 +181,7 @@ class WikiIndexer:
             self.vector_store = QdrantStore(url="http://localhost:6333")
 
         logger.info(f"Async searching wiki for: {query[:50]}... (top_k={top_k})")
-        query_embedding = await self.llm_provider.embed_async(query)
+        query_embedding = await self.embedding_provider.embed_async(query)
 
         # Fetch 3x to account for multi-chunk pages returning duplicate paths
         raw_results = await self.vector_store.search(

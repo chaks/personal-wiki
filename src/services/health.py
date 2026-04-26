@@ -59,16 +59,15 @@ class HealthService:
         self._qdrant_url = qdrant_url
 
     def _check_ollama(self) -> tuple[ServiceStatus, Optional[str]]:
-        """Check Ollama service health.
-
-        Returns:
-            Tuple of (status, error_message)
-        """
-        import ollama
-
+        """Check Ollama service health via the LLM provider."""
         try:
-            ollama.list()
-            return ServiceStatus.HEALTHY, None
+            if self._ollama_provider:
+                healthy = self._ollama_provider.health_check()
+            else:
+                import ollama
+                ollama.list()
+                healthy = True
+            return ServiceStatus.HEALTHY if healthy else ServiceStatus.UNHEALTHY, None
         except Exception as e:
             return ServiceStatus.UNHEALTHY, str(e)
 

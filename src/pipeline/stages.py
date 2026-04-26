@@ -10,6 +10,7 @@ from src.extractor import EntityExtractor
 from src.wiki_writer import WikiPageWriter
 from src.link_resolver import LinkResolver
 from src.indexer import WikiIndexer
+from src.services.embedding_provider import OllamaEmbeddingProvider
 
 logger = logging.getLogger(__name__)
 
@@ -130,10 +131,14 @@ class ResolveStage(PipelineStage):
 class IndexStage(PipelineStage):
     """Indexes all generated pages in Qdrant for semantic search."""
 
+    def __init__(self, embedding_provider=None):
+        self.embedding_provider = embedding_provider
+
     def execute(self, context: PipelineContext) -> PipelineContext:
         logger.info("Indexing pages in Qdrant")
 
-        indexer = WikiIndexer(context.wiki_dir)
+        embedding_provider = self.embedding_provider or OllamaEmbeddingProvider()
+        indexer = WikiIndexer(context.wiki_dir, embedding_provider=embedding_provider)
         pages_to_index = [context.output_path] + context.entity_pages + context.concept_pages
 
         indexed_count = 0

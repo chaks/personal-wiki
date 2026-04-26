@@ -357,7 +357,10 @@ class TestIndexStage:
 
         result = stage.execute(ctx)
 
-        mock_indexer_class.assert_called_once_with(Path("/test/wiki"))
+        mock_indexer_class.assert_called_once()
+        call_kwargs = mock_indexer_class.call_args
+        assert call_kwargs[0][0] == Path("/test/wiki")
+        assert "embedding_provider" in call_kwargs[1]
         assert mock_indexer.index_page.call_count >= 1
 
 

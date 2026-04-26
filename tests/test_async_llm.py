@@ -74,18 +74,3 @@ class TestAsyncLLMProvider:
             with pytest.raises(Exception, match="Connection error"):
                 async for _ in provider.generate_stream_async("test prompt"):
                     pass
-
-    @pytest.mark.asyncio
-    async def test_ollama_provider_embed_async(self):
-        """OllamaProvider embed_async returns embedding via ollama.embeddings."""
-        with patch("src.services.llm_provider.asyncio.to_thread") as mock_to_thread:
-            mock_to_thread.return_value = {"embedding": [0.1, 0.2, 0.3]}
-
-            provider = OllamaProvider(model="gemma4:e2b")
-            result = await provider.embed_async("test text")
-
-            assert result == [0.1, 0.2, 0.3]
-            mock_to_thread.assert_called_once()
-            args, kwargs = mock_to_thread.call_args
-            assert kwargs["model"] == "nomic-embed-text"
-            assert kwargs["prompt"] == "test text"
