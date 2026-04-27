@@ -8,15 +8,21 @@ from typing import Optional
 
 import httpx
 
+from docling.document_converter import DocumentConverter
+from src.extractor import EntityExtractor
+from src.wiki_writer import WikiPageWriter
+from src.link_resolver import LinkResolver
+from src.indexer import WikiIndexer
+from src.services.embedding_provider import OllamaEmbeddingProvider
 from src.pipeline.stages import (
     PipelineContext,
     PipelineStage,
+    ConvertStage,
     ExtractStage,
     WriteStage,
     ResolveStage,
     IndexStage,
 )
-from src.pipeline.runner import PipelineRunner
 from src.ingestion_result import IngestionResult
 
 logger = logging.getLogger(__name__)
@@ -44,33 +50,49 @@ class SourceAdapter(ABC):
         ...
 
     def _shared_stages(self) -> list[PipelineStage]:
+        converter = DocumentConverter()
+        extractor = EntityExtractor(model=self.model, schema_path=self.schema_path)
+        writer = WikiPageWriter(self.wiki_dir)
+        resolver = LinkResolver(self.wiki_dir)
+        embedding_provider = OllamaEmbeddingProvider()
+        indexer = WikiIndexer(self.wiki_dir, embedding_provider=embedding_provider)
+
         return [
-            ExtractStage(model=self.model, schema_path=self.schema_path),
-            WriteStage(),
-            ResolveStage(),
-            IndexStage(),
+            ExtractStage(extractor=extractor),
+            WriteStage(writer=writer),
+            ResolveStage(resolver=resolver),
+            IndexStage(indexer=indexer),
         ]
 
     def run(self) -> IngestionResult:
         logger.info(f"Starting pipeline for adapter: {self.__class__.__name__}")
         try:
             self._ensure_dirs()
-            runner = PipelineRunner()
-            runner.add_stage(self.first_stage())
-            for stage in self._shared_stages():
-                runner.add_stage(stage)
+            stages = [self.first_stage()] + self._shared_stages()
             context = self._initial_context()
-            result_context = runner.run(context)
+
+            logger.info(f"Starting pipeline with {len(stages)} stage(s)")
+            for i, stage in enumerate(stages):
+                logger.debug(f"Executing stage {i + 1}/{len(stages)}: {stage}")
+                try:
+                    context = stage.execute(context)
+                    logger.debug(f"Stage {stage} completed successfully")
+                except Exception as e:
+                    logger.error(f"Stage {stage} failed: {e}")
+                    context.error = e
+                    raise
+
+            logger.info("Pipeline completed successfully")
             logger.info(
-                f"Pipeline complete: {result_context.output_path} "
-                f"({len(result_context.entity_pages)} entities, "
-                f"{len(result_context.concept_pages)} concepts)"
+                f"Pipeline complete: {context.output_path} "
+                f"({len(context.entity_pages)} entities, "
+                f"{len(context.concept_pages)} concepts)"
             )
             return IngestionResult(
                 success=True,
-                output_path=result_context.output_path,
-                entity_pages=result_context.entity_pages,
-                concept_pages=result_context.concept_pages,
+                output_path=context.output_path,
+                entity_pages=context.entity_pages,
+                concept_pages=context.concept_pages,
             )
         except Exception as e:
             logger.error(f"Pipeline failed for {self.__class__.__name__}: {e}")
@@ -98,8 +120,7 @@ class PDFSourceAdapter(SourceAdapter):
         self.source_path = Path(source_path)
 
     def first_stage(self) -> PipelineStage:
-        from src.pipeline.stages import ConvertStage
-        return ConvertStage()
+        return ConvertStage(converter=DocumentConverter())
 
     def _ensure_dirs(self):
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -222,7 +243,6 @@ class URLFetchStage(PipelineStage):
             return response.text
 
     def _html_to_markdown(self, html_content: str) -> str:
-        from docling.document_converter import DocumentConverter
         converter = DocumentConverter()
         result = converter.convert_string(html_content, mime_type="text/html")
         return result.document.export_to_markdown()

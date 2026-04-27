@@ -8,7 +8,6 @@ from src.pipeline.stages import (
     ResolveStage,
     IndexStage,
 )
-from src.pipeline.runner import PipelineRunner
 
 __all__ = [
     "PipelineContext",
@@ -18,5 +17,4 @@ __all__ = [
     "WriteStage",
     "ResolveStage",
     "IndexStage",
-    "PipelineRunner",
 ]

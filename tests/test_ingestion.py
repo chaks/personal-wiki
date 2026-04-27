@@ -41,7 +41,7 @@ def test_adapter_initializes(temp_source, temp_output_dir, temp_wiki_dir):
     assert adapter.wiki_dir == temp_wiki_dir
 
 
-@patch("src.pipeline.stages.DocumentConverter")
+@patch("src.ingestion.adapters.DocumentConverter")
 def test_adapter_runs_pipeline(mock_converter, temp_source, temp_output_dir, temp_wiki_dir):
     """PDFSourceAdapter.run() converts source and returns IngestionResult."""
     from src.ingestion.adapters import PDFSourceAdapter
@@ -62,7 +62,7 @@ def test_adapter_runs_pipeline(mock_converter, temp_source, temp_output_dir, tem
     assert result.output_path == temp_output_dir / "test_source.md"
 
 
-@patch("src.pipeline.stages.DocumentConverter")
+@patch("src.ingestion.adapters.DocumentConverter")
 def test_adapter_handles_failure(mock_converter, temp_source, temp_output_dir, temp_wiki_dir):
     """PDFSourceAdapter.run() returns failure on conversion error."""
     from src.ingestion.adapters import PDFSourceAdapter
@@ -81,11 +81,11 @@ def test_adapter_handles_failure(mock_converter, temp_source, temp_output_dir, t
     assert "Conversion failed" in result.error
 
 
-@patch("src.pipeline.stages.WikiIndexer")
-@patch("src.pipeline.stages.LinkResolver")
-@patch("src.pipeline.stages.WikiPageWriter")
-@patch("src.pipeline.stages.EntityExtractor")
-@patch("src.pipeline.stages.DocumentConverter")
+@patch("src.ingestion.adapters.WikiIndexer")
+@patch("src.ingestion.adapters.LinkResolver")
+@patch("src.ingestion.adapters.WikiPageWriter")
+@patch("src.ingestion.adapters.EntityExtractor")
+@patch("src.ingestion.adapters.DocumentConverter")
 def test_adapter_extracts_entities_and_concepts(
     mock_converter, mock_extractor_class, mock_writer_class,
     mock_resolver_class, mock_indexer_class,

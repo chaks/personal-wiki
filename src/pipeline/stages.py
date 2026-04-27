@@ -5,13 +5,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional, Any
 
-from docling.document_converter import DocumentConverter
-from src.extractor import EntityExtractor
-from src.wiki_writer import WikiPageWriter
-from src.link_resolver import LinkResolver
-from src.indexer import WikiIndexer
-from src.services.embedding_provider import OllamaEmbeddingProvider
-
 logger = logging.getLogger(__name__)
 
 
@@ -47,11 +40,13 @@ class PipelineStage(ABC):
 class ConvertStage(PipelineStage):
     """Converts source document to markdown using Docling."""
 
+    def __init__(self, converter):
+        self.converter = converter
+
     def execute(self, context: PipelineContext) -> PipelineContext:
         logger.info(f"Converting document: {context.source_path}")
 
-        converter = DocumentConverter()
-        result = converter.convert(str(context.source_path))
+        result = self.converter.convert(str(context.source_path))
 
         markdown_content = result.document.export_to_markdown()
 
@@ -72,20 +67,14 @@ class ConvertStage(PipelineStage):
 class ExtractStage(PipelineStage):
     """Extracts entities and concepts from markdown content."""
 
-    def __init__(self, model: str = "gemma4:e2b", schema_path: Optional[Path] = None):
-        self.model = model
-        self.schema_path = schema_path
+    def __init__(self, extractor):
+        self.extractor = extractor
 
     def execute(self, context: PipelineContext) -> PipelineContext:
         logger.info(f"Extracting entities and concepts from: {context.source_doc}")
 
-        extractor = EntityExtractor(
-            model=self.model,
-            schema_path=self.schema_path,
-        )
-
-        context.entities = extractor.extract(context.content, source_doc=context.source_doc)
-        context.concepts = extractor.extract_concepts(context.content, source_doc=context.source_doc)
+        context.entities = self.extractor.extract(context.content, source_doc=context.source_doc)
+        context.concepts = self.extractor.extract_concepts(context.content, source_doc=context.source_doc)
 
         logger.info(f"Extracted {len(context.entities)} entities and {len(context.concepts)} concepts")
         return context
@@ -94,19 +83,20 @@ class ExtractStage(PipelineStage):
 class WriteStage(PipelineStage):
     """Writes entity and concept pages to the wiki."""
 
+    def __init__(self, writer):
+        self.writer = writer
+
     def execute(self, context: PipelineContext) -> PipelineContext:
         logger.info(f"Writing entity and concept pages to: {context.wiki_dir}")
 
-        writer = WikiPageWriter(context.wiki_dir)
-
         context.entity_pages = [
             path for path in
-            (writer.write_entity(e) for e in context.entities if e)
+            (self.writer.write_entity(e) for e in context.entities if e)
             if path is not None
         ]
         context.concept_pages = [
             path for path in
-            (writer.write_concept(c) for c in context.concepts if c)
+            (self.writer.write_concept(c) for c in context.concepts if c)
             if path is not None
         ]
 
@@ -118,11 +108,13 @@ class WriteStage(PipelineStage):
 class ResolveStage(PipelineStage):
     """Resolves wiki links and creates placeholder pages."""
 
+    def __init__(self, resolver):
+        self.resolver = resolver
+
     def execute(self, context: PipelineContext) -> PipelineContext:
         logger.info(f"Resolving wiki links in: {context.output_path}")
 
-        resolver = LinkResolver(context.wiki_dir)
-        resolver.resolve_all(context.output_path)
+        self.resolver.resolve_all(context.output_path)
 
         logger.info("Link resolution complete")
         return context
@@ -131,20 +123,18 @@ class ResolveStage(PipelineStage):
 class IndexStage(PipelineStage):
     """Indexes all generated pages in Qdrant for semantic search."""
 
-    def __init__(self, embedding_provider=None):
-        self.embedding_provider = embedding_provider
+    def __init__(self, indexer):
+        self.indexer = indexer
 
     def execute(self, context: PipelineContext) -> PipelineContext:
         logger.info("Indexing pages in Qdrant")
 
-        embedding_provider = self.embedding_provider or OllamaEmbeddingProvider()
-        indexer = WikiIndexer(context.wiki_dir, embedding_provider=embedding_provider)
         pages_to_index = [context.output_path] + context.entity_pages + context.concept_pages
 
         indexed_count = 0
         for page_path in pages_to_index:
             try:
-                indexer.index_page(page_path)
+                self.indexer.index_page(page_path)
                 indexed_count += 1
                 logger.debug(f"Indexed: {page_path}")
             except Exception as e:
