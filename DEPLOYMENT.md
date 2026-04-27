@@ -20,7 +20,7 @@ environments.
 ## Prerequisites
 
 | Requirement | Minimum Version | Purpose                             |
-|-------------|-----------------|-------------------------------------|
+| ----------- | --------------- | ----------------------------------- |
 | Python      | 3.12+           | Application runtime                 |
 | Docker      | Latest          | Qdrant container                    |
 | Ollama      | Latest          | Local LLM (generation + embeddings) |
@@ -105,7 +105,7 @@ sources:
 
   - type: markdown
     path: sources/markdown/essay-on-distributed-systems.md
-    full_pipeline: true        # Run LLM entity/concept extraction (not just copy+index)
+    full_pipeline: true # Run LLM entity/concept extraction (not just copy+index)
     tags: [distributed-systems]
 
   - type: code
@@ -117,7 +117,7 @@ sources:
 ### Source Types
 
 | Type                               | Description                                   | LLM Extraction         |
-|------------------------------------|-----------------------------------------------|------------------------|
+| ---------------------------------- | --------------------------------------------- | ---------------------- |
 | `pdf`                              | PDF documents via Docling                     | Yes                    |
 | `url`                              | Web pages via Docling                         | Yes                    |
 | `markdown` (default)               | Local markdown files                          | No (copy + index only) |
@@ -148,7 +148,7 @@ python -m src --host 0.0.0.0 --port 8000
 8. **Open the UI**
 
 | Page   | URL                          | Description                       |
-|--------|------------------------------|-----------------------------------|
+| ------ | ---------------------------- | --------------------------------- |
 | Chat   | http://localhost:8000        | Ask questions against your wiki   |
 | Manage | http://localhost:8000/manage | Add, edit, enable/disable sources |
 | Browse | http://localhost:8000/browse | Browse and explore wiki pages     |
@@ -222,8 +222,8 @@ services:
       - "8000:8000"
     environment:
       - QDRANT_URL=http://qdrant:6333
-      - OLLAMA_BASE_URL=http://ollama:11434
       - WIKI_API_KEYS=${WIKI_API_KEYS}
+      - LOG_LEVEL=info
     volumes:
       - ./wiki:/app/wiki
       - ./state:/app/state
@@ -302,13 +302,37 @@ docker compose exec app python -m src.ingest
 ## Environment Variables
 
 | Variable          | Default                  | Description                                                                                                                                                                                                                                    |
-|-------------------|--------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `QDRANT_URL`      | `http://localhost:6333`  | Qdrant server URL                                                                                                                                                                                                                              |
-| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server URL                                                                                                                                                                                                                              |
-| `WIKI_API_KEYS`   | *(none)*                 | Comma-separated API keys for authentication. When set, all requests require the `X-API-Key` header (except `/health`, `/docs`, `/openapi.json`). Generate with: `python -c "from src.auth import generate_api_key; print(generate_api_key())"` |
-| `WIKI_DIR`        | `./wiki`                 | Path to wiki content directory                                                                                                                                                                                                                 |
-| `STATE_DIR`       | `./state`                | Path to state directory (chat history, registry, change-tracking)                                                                                                                                                                              |
-| `LOG_LEVEL`       | `INFO`                   | Logging level (`DEBUG`, `INFO`, `WARNING`, `ERROR`)                                                                                                                                                                                            |
+| ----------------- | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `QDRANT_URL`      | `http://localhost:6333`  | Qdrant server URL. Set in `config/settings.yaml` under `services.vector_store.url`. Can be overridden via the `QDRANT_URL` env var (Pydantic Settings).                                                                                     |
+| `WIKI_API_KEYS`   | _(none)_                 | Comma-separated API keys for authentication. When set, all requests require the `X-API-Key` header (except `/health`, `/docs`, `/openapi.json`). Generate with: `python -c "from src.auth import generate_api_key; print(generate_api_key())"` |
+| `LOG_LEVEL`       | `INFO`                   | Logging level (`DEBUG`, `INFO`, `WARNING`, `ERROR`). Pass via `--log-level` flag or set in Docker environment.                                                                                                                                |
+
+### Configuration via `config/settings.yaml`
+
+Most settings are managed through a YAML config file rather than environment variables:
+
+```yaml
+services:
+  llm:
+    model: gemma4:e2b
+    embedding_model: nomic-embed-text
+  vector_store:
+    url: http://localhost:6333
+    collection: personal_wiki
+
+wiki:
+  categories: [entities, concepts, events, documents]
+  frontmatter:
+    required: [title, category]
+    optional: [created_at, updated_at, links, source_refs]
+
+ingestion:
+  output_dir: generated
+  enable_entity_extraction: true
+  enable_concept_extraction: true
+```
+
+The `AppSettings` class in `src/config.py` loads and validates this file via Pydantic, with environment variable overrides supported for `QDRANT_URL`.
 
 ---
 
@@ -344,7 +368,6 @@ services:
       - "8000:8000"
     environment:
       - QDRANT_URL=http://qdrant:6333
-      - OLLAMA_BASE_URL=http://ollama:11434
     depends_on:
       - qdrant
       - ollama
@@ -381,8 +404,9 @@ gcloud run deploy personal-wiki \
   --cpu 2
 ```
 
-For Ollama, use a separate Cloud Run service with GPU acceleration, or run it on a Compute Engine instance. Point
-`OLLAMA_BASE_URL` to the Ollama service URL.
+For Ollama, use a separate Cloud Run service with GPU acceleration, or run it on a Compute Engine instance.
+Note: the Ollama provider connects to `localhost:11434` by default via the `ollama` Python library. For remote
+Ollama instances, set `OLLAMA_HOST=http://<ollama-service-url>` or update the provider constructor accordingly.
 
 **GKE**
 
@@ -429,7 +453,7 @@ print(generate_api_key())  # 64-character hex string
 
 ### CORS Configuration
 
-The default CORS policy restricts origins to `localhost:3000` and `localhost:8000`. For production, update
+The default CORS policy restricts origins to `localhost:3000`, `localhost:8000`, `127.0.0.1:3000`, and `127.0.0.1:8000`. For production, update
 `src/server.py` to allow only your domain:
 
 ```python
@@ -530,7 +554,7 @@ Key log messages to monitor:
 For production observability, track:
 
 | Metric              | Source                        | Alert Threshold  |
-|---------------------|-------------------------------|------------------|
+| ------------------- | ----------------------------- | ---------------- |
 | Response time (p95) | `/chat` endpoint logs         | > 30s            |
 | Search latency      | Search duration logs          | > 5s             |
 | Error rate          | Log analysis of ERROR/WARNING | > 1% of requests |
@@ -547,7 +571,7 @@ Insights).
 ### What to Back Up
 
 | Component                 | Path / Data                       | Backup Method              |
-|---------------------------|-----------------------------------|----------------------------|
+| ------------------------- | --------------------------------- | -------------------------- |
 | Qdrant vectors            | `/qdrant/storage` (Docker volume) | `qdrant snapshot` API      |
 | Wiki content              | `wiki/` directory                 | File copy / rsync          |
 | State (registry, history) | `state/` directory                | File copy / rsync          |
@@ -609,7 +633,7 @@ Schedule regular backups using cron:
 **Problem: "Connection refused" or "Ollama not responding"**
 
 - Ensure Ollama is running: `ollama list`
-- Check the base URL. Default is `http://localhost:11434`. If running in Docker Compose, use `http://ollama:11434`.
+- Check the Ollama host URL. Default is `http://localhost:11434` (set via `OLLAMA_HOST` env var, consumed by the `ollama` Python library). If Ollama runs in a separate container, set `OLLAMA_HOST=http://ollama:11434` in the app container.
 - Verify the models are pulled: `ollama list` should show `gemma4:e2b` and `nomic-embed-text`.
 
 **Problem: Slow LLM responses**
@@ -630,7 +654,7 @@ Schedule regular backups using cron:
 
 - Ensure Qdrant is running: `docker ps | grep qdrant`
 - Check the port: `curl http://localhost:6333/healthz`
-- If running in Docker Compose, verify the service name matches `QDRANT_URL` (e.g., `http://qdrant:6333`).
+- If running in Docker Compose, verify `config/settings.yaml` has the correct `services.vector_store.url` (e.g., `http://qdrant:6333`).
 
 **Problem: Missing collections or empty search results**
 
@@ -670,5 +694,5 @@ Schedule regular backups using cron:
 
 **Problem: Chat history not persisting**
 
-- Verify the `STATE_DIR` environment variable points to a writable directory.
-- Check that the SQLite database file exists in `state/chat_history.db`.
+- The SQLite database is stored in `state/chat_history.db` relative to the project root. Ensure this directory is writable and mounted as a Docker volume.
+- Verify `state/` is included in the Docker Compose volume mounts (or equivalent in your deployment).

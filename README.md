@@ -1,24 +1,24 @@
 # Personal Wiki Chat
 
-A local AI-powered chat assistant that queries a persistent knowledge wiki built from your documents, code, and notes.
+A local AI-powered chat assistant that queries a persistent knowledge wiki built from your documents, code, and notes. Everything runs offline via Ollama — no external API keys required.
 
 ## Features
 
-- **Document Ingestion**: Convert PDFs, URLs, markdown, and code to markdown via Docling
+- **Document Ingestion**: Convert PDFs, URLs, markdown, and code repositories to markdown via Docling
 - **LLM Entity Extraction**: Automatic extraction of entities and concepts using gemma4:e2b
-- **Wiki Generation**: Creates structured wiki pages in `wiki/entities/` and `wiki/concepts/`
-- **Semantic Search**: Qdrant vector index for intelligent query retrieval
-- **Local LLM**: Runs entirely offline with Ollama (gemma4:e2b for extraction, nomic-embed-text for embeddings)
-- **Change Detection**: Content-hash based tracking skips unchanged sources
+- **Wiki Generation**: Creates structured wiki pages in `wiki/entities/`, `wiki/concepts/`, and `wiki/generated/`
+- **Semantic Search**: Qdrant vector index with chunk-level deduplication for intelligent retrieval
+- **Local LLM**: Runs entirely offline with Ollama (gemma4:e2b for extraction/chat, nomic-embed-text for embeddings)
+- **Change Detection**: SHA256 content-hash tracking skips unchanged sources
 - **Source Management**: REST API and web UI for CRUD operations on data sources
 - **Wiki Browsing**: Web UI to browse and explore generated wiki pages
 - **Chat History**: SQLite-backed persistence for conversation sessions
 - **Markdown Rendering**: Rich markdown (headings, bold, tables, code blocks) in chat responses
-- **Async Processing**: Full async chat and search pipeline
-- **Wiki Maintenance**: LLM-generated markdown with entities, concepts, and links
+- **Async Pipeline**: Full async vector store, indexer, and LLM layers with sync wrappers
+- **Wiki Maintenance**: LLM-generated markdown with entities, concepts, and cross-links
 - **Wiki Lint**: 5 comprehensive checks (broken links, duplicates, contradictions, stale claims)
 - **Security**: API key authentication, rate limiting, prompt injection protection
-- **Health Checks**: Centralized service health endpoint
+- **Health Checks**: Centralized service health endpoint (Ollama + Qdrant + App)
 
 ## Architecture
 
@@ -33,17 +33,32 @@ sources/ → Docling → wiki/ → Qdrant → Chat UI
 
 The ingestion pipeline creates three types of pages:
 
-- `wiki/generated/` - Raw document summaries (from Docling)
-- `wiki/entities/` - Extracted entities (people, organizations, products, technologies)
-- `wiki/concepts/` - Extracted concepts (theories, patterns, methodologies)
+- `wiki/generated/` — Raw document summaries (from Docling)
+- `wiki/entities/` — Extracted entities (people, organizations, products, technologies)
+- `wiki/concepts/` — Extracted concepts (theories, patterns, methodologies)
 
 ### Service Layers
 
-- `src/services/` - LLM provider and vector store abstractions
-- `src/ingestion/` - Code and URL ingestors
-- `src/pipeline/` - Pipeline runner and stage definitions
-- `src/routes/` - REST API routes (source management, wiki browsing)
-- `src/lint_checks/` - Wiki quality checks
+- `src/services/` — Provider abstractions: `LLMProvider`, `EmbeddingProvider`, `VectorStore`
+- `src/ingestion/` — `SourceAdapter` ABC with concrete adapters (`PDFSourceAdapter`, `URLSourceAdapter`, `CodeSourceAdapter`) wired to shared pipeline stages
+- `src/pipeline/` — Stage definitions (`ConvertStage`, `ExtractStage`, `WriteStage`, `ResolveStage`, `IndexStage`) with injected dependencies
+- `src/routes/` — REST API routes (source management, wiki browsing)
+- `src/lint_checks/` — Wiki quality checks
+- `src/prompt.py` — Unified `build_rag_prompt()` for RAG prompt construction
+
+### Ingestion Pipeline
+
+Each source adapter implements `first_stage()` to return a type-specific initial stage, then shares the post-processing stages:
+
+```
+first_stage() → Extract → Write → Resolve → Index
+```
+
+- **PDF/Markdown** → `ConvertStage` (Docling)
+- **URLs** → `URLFetchStage` (httpx fetch + Docling HTML conversion)
+- **Code repos** → `CodeGenerateStage` (AST docstring extraction + source wrapping)
+
+Pipeline execution is driven by `SourceAdapter.run()` in `src/ingest.py` via `run_source()`, which accepts a `Reporter` for status output (`FileReporter` for CLI, `NullReporter` for tests).
 
 ## Quick Start
 
@@ -115,7 +130,7 @@ sources:
 ```
 
 The `full_pipeline` flag controls whether markdown files go through the full LLM extraction (entity/concept extraction,
-wiki page creation) or are simply indexed as-is.
+wiki page creation) or are simply copied and indexed.
 
 ### Running Ingestion
 
@@ -162,19 +177,26 @@ make lint-wiki    # Check for broken links, orphans, duplicates, etc.
 
 ```
 personal-wiki/
-├── sources/          # Raw input documents (immutable)
-├── wiki/             # LLM-maintained markdown
-├── state/            # Registry and change-tracking state
-├── static/           # Chat UI files
-├── src/              # Python source code
-│   ├── routes/       # REST API routes
-│   ├── services/     # LLM and vector store abstractions
-│   ├── pipeline/     # Ingestion pipeline stages
-│   ├── ingestion/    # Code and URL ingestors
-│   └── lint_checks/  # Wiki quality checks
-├── config/           # Configuration
-├── Makefile          # Development commands
-└── tests/            # Test suite
+├── sources/              # Raw input documents (immutable)
+├── wiki/                 # LLM-maintained markdown
+├── state/                # Registry and change-tracking state
+├── static/               # Chat UI files
+├── src/                  # Python source code
+│   ├── routes/           # REST API routes
+│   ├── services/         # LLMProvider, EmbeddingProvider, VectorStore abstractions
+│   ├── pipeline/         # Stage definitions (Convert, Extract, Write, Resolve, Index)
+│   ├── ingestion/        # SourceAdapter ABC + concrete adapters
+│   ├── lint_checks/      # Wiki quality checks
+│   ├── ingest.py         # Ingestion CLI (SourceSpec, Reporter, run_source)
+│   ├── prompt.py         # Unified RAG prompt builder
+│   ├── chat.py           # ChatEngine with wiki retrieval
+│   ├── history.py        # SQLite-backed chat history
+│   ├── indexer.py        # Qdrant-based semantic indexing
+│   ├── registry.py       # Source registry with SHA256 change detection
+│   └── server.py         # FastAPI app factory (create_app)
+├── config/               # Configuration
+├── Makefile              # Development commands
+└── tests/                # Test suite
 ```
 
 ## Testing
