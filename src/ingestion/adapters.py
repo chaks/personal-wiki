@@ -1,4 +1,5 @@
 """Source adapters — type-specific ingestion wired to the shared pipeline."""
+import asyncio
 import re
 import ast
 import logging
@@ -14,15 +15,6 @@ from src.wiki_writer import WikiPageWriter
 from src.link_resolver import LinkResolver
 from src.indexer import WikiIndexer
 from src.services.embedding_provider import OllamaEmbeddingProvider
-from src.pipeline.stages import (
-    PipelineContext,
-    PipelineStage,
-    ConvertStage,
-    ExtractStage,
-    WriteStage,
-    ResolveStage,
-    IndexStage,
-)
 from src.ingestion_result import IngestionResult
 
 logger = logging.getLogger(__name__)
@@ -31,9 +23,9 @@ logger = logging.getLogger(__name__)
 class SourceAdapter(ABC):
     """Interface for type-specific ingestion.
 
-    Each adapter implements `first_stage()` to return a type-specific
-    pipeline stage, then shares the post-processing stages
-    (Extract -> Write -> Resolve -> Index).
+    Each adapter implements `convert()` to perform type-specific
+    processing, then runs the shared post-processing steps directly:
+    extract -> write -> resolve -> index.
     """
 
     def __init__(self, wiki_dir: Path, output_dir: Path,
@@ -45,54 +37,54 @@ class SourceAdapter(ABC):
         self.schema_path = schema_path
 
     @abstractmethod
-    def first_stage(self) -> PipelineStage:
-        """Return the type-specific first pipeline stage."""
+    def convert(self) -> tuple[str, Path]:
+        """Perform type-specific first step. Return (content, output_path)."""
         ...
-
-    def _shared_stages(self) -> list[PipelineStage]:
-        converter = DocumentConverter()
-        extractor = EntityExtractor(model=self.model, schema_path=self.schema_path)
-        writer = WikiPageWriter(self.wiki_dir)
-        resolver = LinkResolver(self.wiki_dir)
-        embedding_provider = OllamaEmbeddingProvider()
-        indexer = WikiIndexer(self.wiki_dir, embedding_provider=embedding_provider)
-
-        return [
-            ExtractStage(extractor=extractor),
-            WriteStage(writer=writer),
-            ResolveStage(resolver=resolver),
-            IndexStage(indexer=indexer),
-        ]
 
     def run(self) -> IngestionResult:
         logger.info(f"Starting pipeline for adapter: {self.__class__.__name__}")
         try:
             self._ensure_dirs()
-            stages = [self.first_stage()] + self._shared_stages()
-            context = self._initial_context()
 
-            logger.info(f"Starting pipeline with {len(stages)} stage(s)")
-            for i, stage in enumerate(stages):
-                logger.debug(f"Executing stage {i + 1}/{len(stages)}: {stage}")
+            content, output_path = self.convert()
+
+            extractor = EntityExtractor(model=self.model, schema_path=self.schema_path)
+            entities = extractor.extract(content, source_doc=str(output_path))
+            concepts = extractor.extract_concepts(content, source_doc=str(output_path))
+            logger.info(f"Extracted {len(entities)} entities and {len(concepts)} concepts")
+
+            writer = WikiPageWriter(self.wiki_dir)
+            entity_pages = [
+                path for path in (writer.write_entity(e) for e in entities if e)
+                if path is not None
+            ]
+            concept_pages = [
+                path for path in (writer.write_concept(c) for c in concepts if c)
+                if path is not None
+            ]
+            logger.info(f"Created {len(entity_pages)} entity pages, {len(concept_pages)} concept pages")
+
+            resolver = LinkResolver(self.wiki_dir)
+            resolver.resolve_all(output_path)
+            logger.info("Link resolution complete")
+
+            embedding_provider = OllamaEmbeddingProvider()
+            indexer = WikiIndexer(self.wiki_dir, embedding_provider=embedding_provider)
+            all_pages = [output_path] + entity_pages + concept_pages
+            indexed_count = 0
+            for page_path in all_pages:
                 try:
-                    context = stage.execute(context)
-                    logger.debug(f"Stage {stage} completed successfully")
+                    asyncio.run(indexer.index_page_async(page_path))
+                    indexed_count += 1
                 except Exception as e:
-                    logger.error(f"Stage {stage} failed: {e}")
-                    context.error = e
-                    raise
+                    logger.warning(f"Failed to index {page_path}: {e}")
+            logger.info(f"Indexed {indexed_count} pages")
 
-            logger.info("Pipeline completed successfully")
-            logger.info(
-                f"Pipeline complete: {context.output_path} "
-                f"({len(context.entity_pages)} entities, "
-                f"{len(context.concept_pages)} concepts)"
-            )
             return IngestionResult(
                 success=True,
-                output_path=context.output_path,
-                entity_pages=context.entity_pages,
-                concept_pages=context.concept_pages,
+                output_path=output_path,
+                entity_pages=entity_pages,
+                concept_pages=concept_pages,
             )
         except Exception as e:
             logger.error(f"Pipeline failed for {self.__class__.__name__}: {e}")
@@ -105,9 +97,6 @@ class SourceAdapter(ABC):
     @abstractmethod
     def _ensure_dirs(self): ...
 
-    @abstractmethod
-    def _initial_context(self) -> PipelineContext: ...
-
 
 class PDFSourceAdapter(SourceAdapter):
     """Adapts PDF/Markdown files to the shared pipeline."""
@@ -119,19 +108,21 @@ class PDFSourceAdapter(SourceAdapter):
                          model=model, schema_path=schema_path)
         self.source_path = Path(source_path)
 
-    def first_stage(self) -> PipelineStage:
-        return ConvertStage(converter=DocumentConverter())
+    def convert(self) -> tuple[str, Path]:
+        converter = DocumentConverter()
+        result = converter.convert(str(self.source_path))
+        markdown_content = result.document.export_to_markdown()
+
+        output_filename = self.source_path.stem + ".md"
+        output_path = self.output_dir / output_filename
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(markdown_content)
+        logger.info(f"Converted to markdown: {output_path}")
+        return markdown_content, output_path
 
     def _ensure_dirs(self):
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.wiki_dir.mkdir(parents=True, exist_ok=True)
-
-    def _initial_context(self) -> PipelineContext:
-        return PipelineContext(
-            source_path=self.source_path,
-            output_dir=self.output_dir,
-            wiki_dir=self.wiki_dir,
-        )
 
 
 class URLSourceAdapter(SourceAdapter):
@@ -150,18 +141,40 @@ class URLSourceAdapter(SourceAdapter):
         self.url = url
         self.timeout = timeout
 
-    def first_stage(self) -> PipelineStage:
-        return URLFetchStage(url=self.url, output_dir=self.output_dir,
-                             timeout=self.timeout)
+    def convert(self) -> tuple[str, Path]:
+        html_content = self._fetch()
+        markdown_content = self._html_to_markdown(html_content)
+        title = self._extract_title(html_content)
+        output_path = self._generate_output_path(title)
+
+        output_path.write_text(markdown_content)
+        logger.info(f"Wrote markdown to {output_path}")
+        return markdown_content, output_path
+
+    def _fetch(self) -> str:
+        with httpx.Client(timeout=self.timeout) as client:
+            response = client.get(self.url)
+            response.raise_for_status()
+            return response.text
+
+    def _html_to_markdown(self, html_content: str) -> str:
+        converter = DocumentConverter()
+        result = converter.convert_string(html_content, mime_type="text/html")
+        return result.document.export_to_markdown()
+
+    def _extract_title(self, html_content: str) -> str:
+        match = re.search(r"<title[^>]*>([^<]+)</title>", html_content)
+        if match:
+            return match.group(1).strip()
+        return "untitled"
+
+    def _generate_output_path(self, title: str) -> Path:
+        slug = title.lower().replace(" ", "-").replace("/", "-")
+        slug = "".join(c for c in slug if c.isalnum() or c in "-_")
+        return self.output_dir / f"{slug}.md"
 
     def _ensure_dirs(self):
         self.output_dir.mkdir(parents=True, exist_ok=True)
-
-    def _initial_context(self) -> PipelineContext:
-        return PipelineContext(
-            output_dir=self.output_dir,
-            wiki_dir=self.wiki_dir,
-        )
 
 
 class CodeSourceAdapter(SourceAdapter):
@@ -191,90 +204,11 @@ class CodeSourceAdapter(SourceAdapter):
         self.language = language.lower()
         self.extensions = self.LANGUAGE_EXTENSIONS.get(self.language, [])
 
-    def first_stage(self) -> PipelineStage:
-        return CodeGenerateStage(
-            code_dir=self.code_dir,
-            output_dir=self.output_dir,
-            language=self.language,
-            extensions=self.extensions,
-        )
-
-    def _ensure_dirs(self):
-        self.output_dir.mkdir(parents=True, exist_ok=True)
-
-    def _initial_context(self) -> PipelineContext:
-        return PipelineContext(
-            output_dir=self.output_dir,
-            wiki_dir=self.wiki_dir,
-        )
-
-
-# ============================================================================
-# Type-specific first stages
-# ============================================================================
-
-class URLFetchStage(PipelineStage):
-    """Fetches URL content and converts to markdown."""
-
-    def __init__(self, url: str, output_dir: Path, timeout: float = 30.0):
-        self.url = url
-        self.output_dir = output_dir
-        self.timeout = timeout
-
-    def execute(self, context: PipelineContext) -> PipelineContext:
-        logger.info(f"Fetching URL: {self.url}")
-        html_content = self._fetch()
-        markdown_content = self._html_to_markdown(html_content)
-        title = self._extract_title(html_content)
-        output_path = self._generate_output_path(title)
-
-        output_path.write_text(markdown_content)
-        logger.info(f"Wrote markdown to {output_path}")
-
-        context.content = markdown_content
-        context.output_path = output_path
-        context.source_doc = self.url
-        return context
-
-    def _fetch(self) -> str:
-        with httpx.Client(timeout=self.timeout) as client:
-            response = client.get(self.url)
-            response.raise_for_status()
-            return response.text
-
-    def _html_to_markdown(self, html_content: str) -> str:
-        converter = DocumentConverter()
-        result = converter.convert_string(html_content, mime_type="text/html")
-        return result.document.export_to_markdown()
-
-    def _extract_title(self, html_content: str) -> str:
-        match = re.search(r"<title[^>]*>([^<]+)</title>", html_content)
-        if match:
-            return match.group(1).strip()
-        return "untitled"
-
-    def _generate_output_path(self, title: str) -> Path:
-        slug = title.lower().replace(" ", "-").replace("/", "-")
-        slug = "".join(c for c in slug if c.isalnum() or c in "-_")
-        return self.output_dir / f"{slug}.md"
-
-
-class CodeGenerateStage(PipelineStage):
-    """Scans code files and generates combined markdown documentation."""
-
-    def __init__(self, code_dir: Path, output_dir: Path,
-                 language: str, extensions: list[str]):
-        self.code_dir = code_dir
-        self.output_dir = output_dir
-        self.language = language
-        self.extensions = extensions
-
-    def execute(self, context: PipelineContext) -> PipelineContext:
+    def convert(self) -> tuple[str, Path]:
         code_files = self._find_files()
         if not code_files:
             logger.info("No code files found")
-            context.output_path = None
-            return context
+            return "", Path()
 
         all_docs = []
         for file_path in code_files:
@@ -287,11 +221,7 @@ class CodeGenerateStage(PipelineStage):
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text("\n\n---\n\n".join(all_docs))
         logger.info(f"Wrote code documentation to {output_path}")
-
-        context.content = output_path.read_text()
-        context.output_path = output_path
-        context.source_doc = str(self.code_dir)
-        return context
+        return output_path.read_text(), output_path
 
     def _find_files(self) -> list[Path]:
         if not self.extensions:
@@ -329,3 +259,6 @@ class CodeGenerateStage(PipelineStage):
             "",
         ])
         return "\n".join(md_lines)
+
+    def _ensure_dirs(self):
+        self.output_dir.mkdir(parents=True, exist_ok=True)

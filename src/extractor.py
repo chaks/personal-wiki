@@ -1,5 +1,5 @@
-# src/extractor.py
 """LLM-based entity and concept extraction using Ollama."""
+import asyncio
 import json
 import logging
 import re
@@ -165,8 +165,10 @@ Rules:
             chunk = self._get_document_chunk(document)
             prompt = self.entity_prompt.format(document=chunk)
 
-            raw_text = self.llm_provider.generate(
-                prompt, system=self.ENTITY_SYSTEM
+            raw_text = asyncio.run(
+                self.llm_provider.generate_async(
+                    prompt, system=self.ENTITY_SYSTEM
+                )
             )
 
             entities = self._parse_entities(raw_text)
@@ -204,8 +206,10 @@ Rules:
             chunk = self._get_document_chunk(document)
             prompt = self.concept_prompt.format(document=chunk)
 
-            raw_text = self.llm_provider.generate(
-                prompt, system=self.CONCEPT_SYSTEM
+            raw_text = asyncio.run(
+                self.llm_provider.generate_async(
+                    prompt, system=self.CONCEPT_SYSTEM
+                )
             )
 
             concepts = self._parse_concepts(raw_text)

@@ -1,7 +1,7 @@
-# tests/test_extractor.py
 """Tests for LLM-based entity and concept extraction."""
 import pytest
 from pathlib import Path
+from typing import Optional
 from unittest.mock import Mock, patch
 from src.extractor import Entity, Concept, EntityExtractor
 from src.services.llm_provider import OllamaProvider, LLMProvider
@@ -122,21 +122,28 @@ class MockLLMProvider(LLMProvider):
         self.response = response
         self.call_count = 0
 
-    def generate(self, prompt: str, system: str | None = None) -> str:
+    def health_check(self) -> bool:
+        return True
+
+    async def generate_async(self, prompt: str, system: Optional[str] = None) -> str:
         self.call_count += 1
         return self.response
 
-    def generate_stream(self, prompt: str, system: str | None = None):
+    async def generate_stream_async(self, prompt: str, system: Optional[str] = None):
         yield self.response
+
+
+class ErrorProvider(LLMProvider):
+    """Test double that raises errors."""
 
     def health_check(self) -> bool:
         return True
 
-    async def generate_async(self, prompt: str, system: str | None = None) -> str:
-        return self.response
+    async def generate_async(self, prompt: str, system: Optional[str] = None) -> str:
+        raise Exception("API error")
 
-    async def generate_stream_async(self, prompt: str, system: str | None = None):
-        yield self.response
+    async def generate_stream_async(self, prompt: str, system: Optional[str] = None):
+        raise Exception("API error")
 
 
 class TestEntityExtraction:
@@ -181,15 +188,11 @@ class TestEntityExtraction:
     def test_extract_entities_handles_api_error(self, sample_document):
         """Extract returns empty list when LLM API fails."""
         class ErrorProvider(LLMProvider):
-            def generate(self, prompt: str, system: str | None = None) -> str:
-                raise Exception("API error")
-            def generate_stream(self, prompt: str, system: str | None = None):
-                raise Exception("API error")
             def health_check(self) -> bool:
                 return True
-            async def generate_async(self, prompt: str, system: str | None = None) -> str:
+            async def generate_async(self, prompt: str, system: Optional[str] = None) -> str:
                 raise Exception("API error")
-            async def generate_stream_async(self, prompt: str, system: str | None = None):
+            async def generate_stream_async(self, prompt: str, system: Optional[str] = None):
                 raise Exception("API error")
 
         extractor = EntityExtractor(llm_provider=ErrorProvider())
@@ -269,15 +272,11 @@ class TestConceptExtraction:
     def test_extract_concepts_handles_api_error(self, sample_document):
         """Extract concepts returns empty list when LLM API fails."""
         class ErrorProvider(LLMProvider):
-            def generate(self, prompt: str, system: str | None = None) -> str:
-                raise Exception("API error")
-            def generate_stream(self, prompt: str, system: str | None = None):
-                raise Exception("API error")
             def health_check(self) -> bool:
                 return True
-            async def generate_async(self, prompt: str, system: str | None = None) -> str:
+            async def generate_async(self, prompt: str, system: Optional[str] = None) -> str:
                 raise Exception("API error")
-            async def generate_stream_async(self, prompt: str, system: str | None = None):
+            async def generate_stream_async(self, prompt: str, system: Optional[str] = None):
                 raise Exception("API error")
 
         extractor = EntityExtractor(llm_provider=ErrorProvider())
@@ -353,19 +352,15 @@ class TestLogging:
         """Extraction logs error on failure."""
         import logging
 
-        class ErrorProvider(LLMProvider):
-            def generate(self, prompt: str, system: str | None = None) -> str:
-                raise Exception("Test error")
-            def generate_stream(self, prompt: str, system: str | None = None):
-                raise Exception("Test error")
+        class TestErrorProvider(LLMProvider):
             def health_check(self) -> bool:
                 return True
-            async def generate_async(self, prompt: str, system: str | None = None) -> str:
+            async def generate_async(self, prompt: str, system: Optional[str] = None) -> str:
                 raise Exception("Test error")
-            async def generate_stream_async(self, prompt: str, system: str | None = None):
+            async def generate_stream_async(self, prompt: str, system: Optional[str] = None):
                 raise Exception("Test error")
 
-        extractor = EntityExtractor(llm_provider=ErrorProvider())
+        extractor = EntityExtractor(llm_provider=TestErrorProvider())
         with caplog.at_level(logging.ERROR):
             extractor.extract(sample_document)
 

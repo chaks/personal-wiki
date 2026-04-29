@@ -2,6 +2,7 @@
 import pytest
 from unittest.mock import Mock, patch
 from pathlib import Path
+from typing import Optional
 import tempfile
 from fastapi.testclient import TestClient
 from src.server import create_app
@@ -13,19 +14,13 @@ class MockLLMProvider(LLMProvider):
     def __init__(self, response: str = ""):
         self.response = response
 
-    def generate(self, prompt: str, system: str | None = None) -> str:
-        return self.response
-
-    def generate_stream(self, prompt: str, system: str | None = None):
-        yield self.response
-
     def health_check(self) -> bool:
         return True
 
-    async def generate_async(self, prompt: str, system: str | None = None) -> str:
+    async def generate_async(self, prompt: str, system: Optional[str] = None) -> str:
         return self.response
 
-    async def generate_stream_async(self, prompt: str, system: str | None = None):
+    async def generate_stream_async(self, prompt: str, system: Optional[str] = None):
         yield self.response
 
 
