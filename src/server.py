@@ -139,14 +139,6 @@ def create_app(
             media_type="text/event-stream",
         )
 
-    @app.post("/chat/async")
-    async def chat_async(request: ChatRequest) -> StreamingResponse:
-        logger.info(f"Async chat request received: {request.message[:50]}...")
-        return StreamingResponse(
-            stream_chat_response_async(request.message, chat_engine),
-            media_type="text/event-stream",
-        )
-
     serve_index = _static_file_handler(static_dir, "index.html")
     app.get("/")(serve_index)
 
@@ -164,11 +156,9 @@ async def stream_chat_response(
     message: str,
     chat_engine,
 ) -> AsyncGenerator[str, None]:
-    """Stream chat response as SSE events."""
+    """Stream chat response as SSE events using async LLM streaming."""
     from src.prompt import build_rag_prompt
 
-    # Yield ping immediately so the SSE connection is established
-    # and the browser's typing indicator stays visible during search.
     yield ": ping\n\n"
 
     logger.debug(f"Searching wiki for: {message[:50]}...")
@@ -183,37 +173,6 @@ async def stream_chat_response(
     system, user_prompt = build_rag_prompt(context_pages, message)
 
     logger.debug(f"Sending prompt to LLM ({len(user_prompt)} chars)")
-    stream = chat_engine.llm_provider.generate_stream(user_prompt, system=system)
-
-    chunk_count = 0
-    for response_text in stream:
-        if response_text:
-            chunk_count += 1
-            yield f"data: {json.dumps({'text': response_text})}\n\n"
-
-    logger.info(f"Streamed {chunk_count} chunks, sending [DONE]")
-    yield "data: [DONE]\n\n"
-
-
-async def stream_chat_response_async(
-    message: str,
-    chat_engine,
-) -> AsyncGenerator[str, None]:
-    """Stream chat response as SSE events using async methods."""
-    from src.prompt import build_rag_prompt
-
-    logger.debug(f"Async searching wiki for: {message[:50]}...")
-    start_time = time.time()
-    context_pages = await chat_engine.search_async(message)
-    search_duration = time.time() - start_time
-
-    logger.info(
-        f"Async search completed in {search_duration:.3f}s, found {len(context_pages)} pages"
-    )
-
-    system, user_prompt = build_rag_prompt(context_pages, message)
-
-    logger.debug(f"Sending prompt to LLM ({len(user_prompt)} chars)")
     stream = chat_engine.llm_provider.generate_stream_async(user_prompt, system=system)
 
     chunk_count = 0
@@ -222,7 +181,7 @@ async def stream_chat_response_async(
             chunk_count += 1
             yield f"data: {json.dumps({'text': response_text})}\n\n"
 
-    logger.info(f"Async streamed {chunk_count} chunks, sending [DONE]")
+    logger.info(f"Streamed {chunk_count} chunks, sending [DONE]")
     yield "data: [DONE]\n\n"
 
 

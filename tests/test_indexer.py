@@ -30,12 +30,6 @@ class FakeEmbeddingProvider:
 class FakeLLMProvider(LLMProvider):
     """Deterministic generation provider for tests."""
 
-    def generate(self, prompt: str, system=None) -> str:
-        return "fake"
-
-    def generate_stream(self, prompt: str, system=None):
-        yield "fake"
-
     def health_check(self) -> bool:
         return True
 

@@ -34,12 +34,6 @@ class MockAsyncLLMProvider(LLMProvider):
         self.generate_calls = []
         self.generate_stream_calls = []
 
-    def generate(self, prompt: str, system: str | None = None) -> str:
-        return "sync response"
-
-    def generate_stream(self, prompt: str, system: str | None = None):
-        yield "sync chunk"
-
     def health_check(self) -> bool:
         return True
 

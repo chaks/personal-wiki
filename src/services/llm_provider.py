@@ -2,38 +2,13 @@
 import asyncio
 import logging
 from abc import ABC, abstractmethod
-from typing import AsyncIterator, Iterator, Optional
+from typing import AsyncIterator, Optional
 
 logger = logging.getLogger(__name__)
 
 
 class LLMProvider(ABC):
-    """Abstract interface for LLM providers."""
-
-    @abstractmethod
-    def generate(self, prompt: str) -> str:
-        """Generate a completion for the given prompt.
-
-        Args:
-            prompt: The input prompt
-
-        Returns:
-            Generated text response
-        """
-        pass
-
-    @abstractmethod
-    def generate_stream(self, prompt: str, system: Optional[str] = None) -> Iterator[str]:
-        """Stream a completion for the given prompt.
-
-        Args:
-            prompt: The input prompt
-            system: Optional system message for chat-based streaming
-
-        Yields:
-            Text chunks as they are generated
-        """
-        pass
+    """Abstract interface for LLM providers — async core."""
 
     @abstractmethod
     def health_check(self) -> bool:
@@ -82,47 +57,6 @@ class OllamaProvider(LLMProvider):
         """
         self.model = model
         logger.debug(f"OllamaProvider initialized with model: {model}")
-
-    def generate(self, prompt: str, system: Optional[str] = None) -> str:
-        """Generate completion using ollama.chat."""
-        import ollama
-
-        logger.debug(f"Generating with model={self.model}, prompt_len={len(prompt)}")
-        if system:
-            messages = [
-                {"role": "system", "content": system},
-                {"role": "user", "content": prompt},
-            ]
-        else:
-            messages = [{"role": "user", "content": prompt}]
-        response = ollama.chat(
-            model=self.model,
-            messages=messages,
-        )
-        content = response.get("message", {}).get("content", "")
-        return content or ""
-
-    def generate_stream(self, prompt: str, system: Optional[str] = None) -> Iterator[str]:
-        """Stream completion using ollama.chat."""
-        import ollama
-
-        logger.debug(f"Streaming with model={self.model}, prompt_len={len(prompt)}")
-        if system:
-            messages = [
-                {"role": "system", "content": system},
-                {"role": "user", "content": prompt},
-            ]
-        else:
-            messages = [{"role": "user", "content": prompt}]
-        stream = ollama.chat(
-            model=self.model,
-            messages=messages,
-            stream=True,
-        )
-        for chunk in stream:
-            response = chunk.get("message", {}).get("content", "")
-            if response:
-                yield response
 
     def health_check(self) -> bool:
         """Check if Ollama service is available."""
