@@ -2,6 +2,7 @@
 from fastapi import APIRouter, HTTPException, Request
 from pathlib import Path
 
+from src.security.path_validation import validate_path_segment
 from src.lint import WikiLinter
 from src.registry import list_entities as registry_list_entities
 from src.registry import list_concepts as registry_list_concepts
@@ -13,17 +14,6 @@ router = APIRouter(prefix="/api/wiki", tags=["wiki"])
 def _get_wiki_dir(request: Request) -> Path:
     """Get the wiki directory from app state."""
     return Path(request.app.state.wiki_dir)
-
-
-def _validate_name(name: str) -> None:
-    """Validate that a wiki page name does not contain traversal attempts.
-
-    Rejects '..' components and absolute paths to prevent directory traversal.
-    """
-    if ".." in name:
-        raise HTTPException(status_code=400, detail="Name must not contain '..'")
-    if name.startswith("/"):
-        raise HTTPException(status_code=400, detail="Name must not be absolute")
 
 
 @router.get("/entities")
@@ -45,7 +35,7 @@ async def list_concepts(request: Request):
 @router.get("/entities/{name:path}")
 async def get_entity(name: str, request: Request):
     """Get a specific entity by name."""
-    _validate_name(name)
+    validate_path_segment(name)
     wiki_dir = _get_wiki_dir(request)
     entities_dir = wiki_dir / "entities"
     entity_path = entities_dir / f"{name}.md"
@@ -65,7 +55,7 @@ async def get_entity(name: str, request: Request):
 @router.get("/concepts/{name:path}")
 async def get_concept(name: str, request: Request):
     """Get a specific concept by name."""
-    _validate_name(name)
+    validate_path_segment(name)
     wiki_dir = _get_wiki_dir(request)
     concepts_dir = wiki_dir / "concepts"
     concept_path = concepts_dir / f"{name}.md"
@@ -97,7 +87,7 @@ async def list_orphans(request: Request):
 @router.get("/orphans/{name:path}")
 async def get_orphan(name: str, request: Request):
     """Get the content of an orphaned wiki page by its relative path."""
-    _validate_name(name)
+    validate_path_segment(name)
     wiki_dir = _get_wiki_dir(request)
 
     # Resolve relative to wiki_dir (orphan paths are like 'entities/foo.md')

@@ -5,6 +5,8 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 
+from src.security.path_validation import validate_path_segment
+
 router = APIRouter(prefix="/api/sources", tags=["sources"])
 
 # Path to sources.yaml config file
@@ -21,15 +23,7 @@ class SourceInput(BaseModel):
     enabled: bool = Field(default=True, description="Whether the source is enabled")
 
 
-def _validate_path(path: str) -> None:
-    """Validate that a path does not contain traversal attempts."""
-    if ".." in path:
-        raise HTTPException(status_code=400, detail="Path must not contain '..'")
-    if path.startswith("/"):
-        raise HTTPException(status_code=400, detail="Path must not be absolute (must not start with '/')")
-
-
-# Basic URL validation: must have scheme (http/https) and a domain-like structure
+# Basic URL validation
 _URL_PATTERN = re.compile(
     r'^https?://'  # scheme
     r'(?:(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+[A-Z]{2,6}\.?|'  # domain
@@ -93,7 +87,7 @@ async def add_source(source: SourceInput):
     source_dict = {"type": source.type, "tags": source.tags, "enabled": source.enabled}
 
     if source.path:
-        _validate_path(source.path)
+        validate_path_segment(source.path)
         source_dict["path"] = source.path
     if source.url:
         _validate_url(source.url)
@@ -131,7 +125,7 @@ async def add_source(source: SourceInput):
 @router.delete("/path/{path:path}")
 async def delete_source(path: str):
     """Delete a source by its path."""
-    _validate_path(path)
+    validate_path_segment(path)
     sources_file = _resolve_sources_file()
 
     try:
