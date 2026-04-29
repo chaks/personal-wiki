@@ -20,6 +20,7 @@ setup_logging(log_dir=root / "logs", level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 from src.ingestion.adapters import PDFSourceAdapter, URLSourceAdapter, CodeSourceAdapter
+from src.ingestion.markdown_copy_adapter import MarkdownCopyAdapter
 from src.ingestion_result import IngestionResult
 from src.registry import SourceRegistry, SourceStatus
 
@@ -232,25 +233,23 @@ def main():
         tags = source.get("tags", [])
 
         if source_type == "markdown" and not source.get("full_pipeline", False):
-            # Copy-only path (not handled by run_source)
             source_path = Path(source["path"])
             if not source_path.exists():
                 reporter.skip(str(source_path), "does not exist")
                 skipped += 1
                 continue
 
-            output_path = wiki_dir / source_path.relative_to(source_path.parent.parent)
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-            output_path.write_text(source_path.read_text())
-            reporter.copying(source_path.name, output_path)
-            logger.info(f"Copied markdown: {source_path.name} -> {output_path}")
-
-            from src.indexer import WikiIndexer
-            from src.services.embedding_provider import OllamaEmbeddingProvider
-            indexer = WikiIndexer(wiki_dir, embedding_provider=OllamaEmbeddingProvider())
-            indexer.index_page(output_path)
-            logger.info(f"Indexed {output_path} in Qdrant")
-            processed += 1
+            adapter = MarkdownCopyAdapter(source_path=source_path, wiki_dir=wiki_dir)
+            result = adapter.run()
+            if result.success:
+                reporter.copying(source_path.name, result.output_path)
+                registry.link_wiki_page(source_id, str(result.output_path))
+                registry.update_status(source_id, SourceStatus.PROCESSED)
+                processed += 1
+            else:
+                reporter.failure(source_path.name, result.error)
+                registry.update_status(source_id, SourceStatus.FAILED, result.error)
+                failed += 1
             continue
 
         spec = SourceSpec(

@@ -1,5 +1,6 @@
 """Tests for refactored EntityExtractor with DI."""
 import pytest
+from typing import Optional
 from src.extractor import EntityExtractor
 from src.services.llm_provider import LLMProvider
 
@@ -11,20 +12,14 @@ class MockLLMProvider(LLMProvider):
         self.response = response
         self.call_count = 0
 
-    def generate(self, prompt: str, system: str | None = None) -> str:
-        self.call_count += 1
-        return self.response
-
-    def generate_stream(self, prompt: str, system: str | None = None):
-        yield self.response
-
     def health_check(self) -> bool:
         return True
 
-    async def generate_async(self, prompt: str, system: str | None = None) -> str:
+    async def generate_async(self, prompt: str, system: Optional[str] = None) -> str:
+        self.call_count += 1
         return self.response
 
-    async def generate_stream_async(self, prompt: str, system: str | None = None):
+    async def generate_stream_async(self, prompt: str, system: Optional[str] = None):
         yield self.response
 
 

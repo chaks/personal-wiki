@@ -1,7 +1,7 @@
 """Tests for vector store abstraction (async core)."""
 import pytest
 from unittest.mock import AsyncMock, Mock, patch
-from src.services.vector_store import QdrantStore, SearchPoint, SyncVectorStore
+from src.services.vector_store import QdrantStore, SearchPoint
 
 
 class TestQdrantStoreAsyncCore:
@@ -75,32 +75,3 @@ class TestQdrantStoreAsyncCore:
 
             store = QdrantStore(url="http://localhost:6333")
             assert not hasattr(store, 'upsert_async') or not callable(getattr(store, 'upsert_async', None))
-
-
-class TestSyncVectorStoreWrapper:
-    """Tests for SyncVectorStore — the thin sync facade."""
-
-    def test_upsert_wraps_async(self):
-        """SyncVectorStore.upsert wraps the async inner call."""
-        class MockAsyncStore:
-            async def upsert(self, collection_name, points):
-                return True
-            async def search(self, collection_name, query_vector, limit=5):
-                return []
-
-        wrapper = SyncVectorStore(MockAsyncStore())
-        result = wrapper.upsert("test", [{"id": 1}])
-        assert result is True
-
-    def test_search_wraps_async(self):
-        """SyncVectorStore.search wraps the async inner call."""
-        class MockAsyncStore:
-            async def upsert(self, collection_name, points):
-                return True
-            async def search(self, collection_name, query_vector, limit=5):
-                return [SearchPoint(id="x", score=0.9, payload={})]
-
-        wrapper = SyncVectorStore(MockAsyncStore())
-        results = wrapper.search("test", [0.1], limit=3)
-        assert len(results) == 1
-        assert results[0].id == "x"

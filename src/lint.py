@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Optional
 
 from src.lint_checks.broken_links import BrokenLinksChecker
-from src.lint_checks.contradictions import ContradictionChecker
 from src.lint_checks.duplicates import DuplicateContentChecker
 from src.lint_checks.stale_claims import StaleClaimsChecker
 from src.utils import slugify
@@ -145,14 +144,9 @@ class WikiLinter:
         )
         stale_claims = stale_claims_checker.check()
 
-        # Run contradiction check
-        contradiction_checker = ContradictionChecker(self.wiki_dir)
-        contradictions = contradiction_checker.check()
-
         return {
             "orphans": self.check_orphans(),
             "broken_links": broken_links,
             "duplicates": duplicates,
             "stale_claims": stale_claims,
-            "contradictions": contradictions,
         }

@@ -8,7 +8,6 @@ from datetime import datetime, timedelta
 from src.lint_checks.broken_links import BrokenLinksChecker, BrokenLink
 from src.lint_checks.duplicates import DuplicateContentChecker, DuplicatePair
 from src.lint_checks.stale_claims import StaleClaimsChecker, StaleClaim
-from src.lint_checks.contradictions import ContradictionChecker
 from src.lint import WikiLinter
 
 
@@ -294,30 +293,6 @@ class TestStaleClaimsChecker:
         assert len(stale_30) == 1
 
 
-class TestContradictionChecker:
-    """Tests for ContradictionChecker."""
-
-    def test_returns_empty_list(self, wiki_dir):
-        """ContradictionChecker returns empty list (NLP not implemented)."""
-        page_a = wiki_dir / "page-a.md"
-        page_a.write_text("# Page A\n\nX is true.\n")
-
-        page_b = wiki_dir / "page-b.md"
-        page_b.write_text("# Page B\n\nX is false.\n")
-
-        checker = ContradictionChecker(wiki_dir)
-        contradictions = checker.check()
-
-        # TODO: When NLP implementation is added, this should detect contradictions
-        assert len(contradictions) == 0
-
-    def test_empty_wiki(self, wiki_dir):
-        """Returns empty list for empty wiki."""
-        checker = ContradictionChecker(wiki_dir)
-        contradictions = checker.check()
-        assert len(contradictions) == 0
-
-
 class TestLintIntegration:
     """Tests for integration of lint checks with WikiLinter."""
 
@@ -334,7 +309,6 @@ class TestLintIntegration:
         assert "broken_links" in results
         assert "duplicates" in results
         assert "stale_claims" in results
-        assert "contradictions" in results
 
         # Should find the broken link
         assert len(results["broken_links"]) == 1

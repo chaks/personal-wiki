@@ -1,4 +1,4 @@
-"""Tests for WikiIndexer — sync/async unified via async core + LLMProvider injection."""
+"""Tests for WikiIndexer — async-native with LLMProvider injection."""
 import pytest
 from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
@@ -29,12 +29,6 @@ class FakeEmbeddingProvider:
 
 class FakeLLMProvider(LLMProvider):
     """Deterministic generation provider for tests."""
-
-    def generate(self, prompt: str, system=None) -> str:
-        return "fake"
-
-    def generate_stream(self, prompt: str, system=None):
-        yield "fake"
 
     def health_check(self) -> bool:
         return True
@@ -131,18 +125,6 @@ class TestWikiIndexerPage:
         assert mock_store.upserted_points[0]["payload"]["path"] == "test.md"
         assert len(fake_embedder.embed_calls) == 1  # single-chunk page, one embedding
 
-    def test_index_page_sync(self, wiki_dir, fake_embedder):
-        """index_page sync wrapper calls index_page_async internally."""
-        mock_store = MockVectorStore()
-        indexer = WikiIndexer(wiki_dir, embedding_provider=fake_embedder, vector_store=mock_store)
-
-        page_file = wiki_dir / "test.md"
-        page_file.write_text("---\ntitle: Test\n---\n\nContent here")
-
-        indexer.index_page(page_file)
-
-        assert len(mock_store.upserted_points) == 1
-
     @pytest.mark.asyncio
     async def test_index_page_multi_chunk(self, wiki_dir, fake_embedder):
         """Multi-chunk pages produce chunk embeddings plus overview."""
@@ -175,7 +157,7 @@ class TestWikiIndexerPage:
 
 
 class TestWikiIndexerSearch:
-    """search / search_async tests."""
+    """search_async tests."""
 
     @pytest.mark.asyncio
     async def test_search_async(self, wiki_dir, fake_embedder):
@@ -190,18 +172,9 @@ class TestWikiIndexerSearch:
         assert results[0]["score"] == 0.95
         assert len(fake_embedder.embed_calls) == 1
 
-    def test_search_sync(self, wiki_dir, fake_embedder):
-        """search sync wrapper delegates to search_async."""
-        mock_store = MockVectorStore()
-        indexer = WikiIndexer(wiki_dir, embedding_provider=fake_embedder, vector_store=mock_store)
-
-        results = indexer.search("test query", top_k=5)
-
-        assert len(results) == 1
-
 
 class TestWikiIndexerBatch:
-    """index_all_wiki_pages tests."""
+    """index_all_wiki_pages_async tests."""
 
     @pytest.mark.asyncio
     async def test_index_all_wiki_pages_async(self, wiki_dir, fake_embedder):
@@ -220,15 +193,3 @@ class TestWikiIndexerBatch:
         count = await indexer.index_all_wiki_pages_async()
 
         assert count == 4
-
-    def test_index_all_wiki_pages_sync(self, wiki_dir, fake_embedder):
-        """index_all_wiki_pages sync wrapper delegates to async."""
-        mock_store = MockVectorStore()
-        indexer = WikiIndexer(wiki_dir, embedding_provider=fake_embedder, vector_store=mock_store)
-
-        (wiki_dir / "page1.md").write_text("Content 1")
-        (wiki_dir / "page2.md").write_text("Content 2")
-
-        count = indexer.index_all_wiki_pages()
-
-        assert count == 2
