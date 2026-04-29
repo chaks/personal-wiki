@@ -144,35 +144,3 @@ class QdrantStore(VectorStore):
             })
 
         return {"collections": collections_info}
-
-
-class SyncVectorStore:
-    """Thin synchronous wrapper around an async VectorStore.
-
-    Uses asyncio.run() to bridge sync callers (CLI, pipeline stages)
-    to the async-native vector store implementation.
-    """
-
-    def __init__(self, async_store: VectorStore):
-        self._async_store = async_store
-
-    def upsert(self, collection_name: str, points: list[dict]) -> bool:
-        """Synchronously upsert points by wrapping the async call."""
-        return asyncio.run(self._async_store.upsert(collection_name, points))
-
-    def search(
-        self,
-        collection_name: str,
-        query_vector: list[float],
-        limit: int = 5
-    ) -> list[SearchPoint]:
-        """Synchronously search by wrapping the async call."""
-        return asyncio.run(self._async_store.search(collection_name, query_vector, limit))
-
-    def health_check(self) -> bool:
-        """Delegate health check to the async store."""
-        return self._async_store.health_check()
-
-    def get_collection_info(self) -> dict:
-        """Delegate collection info to the async store."""
-        return self._async_store.get_collection_info()

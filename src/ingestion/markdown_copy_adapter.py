@@ -1,4 +1,5 @@
 """Copy-only markdown adapter — copies markdown files and indexes them."""
+import asyncio
 import logging
 from pathlib import Path
 from typing import Optional
@@ -44,7 +45,7 @@ class MarkdownCopyAdapter:
 
             indexer = self._get_indexer()
             if indexer:
-                indexer.index_page(output_path)
+                asyncio.run(indexer.index_page_async(output_path))
                 logger.info(f"Indexed {output_path}")
 
             return IngestionResult(

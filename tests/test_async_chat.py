@@ -1,6 +1,7 @@
 """Tests for async chat engine methods."""
 import pytest
 from pathlib import Path
+from typing import Optional
 from unittest.mock import AsyncMock, Mock, patch
 from src.chat import ChatEngine
 from src.services.llm_provider import LLMProvider
@@ -12,9 +13,6 @@ class MockAsyncIndexer:
     def __init__(self, wiki_dir):
         self.wiki_dir = wiki_dir
         self.search_calls = []
-
-    def search(self, query: str, top_k: int = 5) -> list[dict]:
-        return []
 
     async def search_async(self, query: str, top_k: int = 5) -> list[dict]:
         self.search_calls.append((query, top_k))
@@ -37,11 +35,11 @@ class MockAsyncLLMProvider(LLMProvider):
     def health_check(self) -> bool:
         return True
 
-    async def generate_async(self, prompt: str, system: str | None = None) -> str:
+    async def generate_async(self, prompt: str, system: Optional[str] = None) -> str:
         self.generate_calls.append((prompt, system))
         return "async LLM response"
 
-    async def generate_stream_async(self, prompt: str, system: str | None = None):
+    async def generate_stream_async(self, prompt: str, system: Optional[str] = None):
         self.generate_stream_calls.append((prompt, system))
         yield "async chunk 1"
         yield "async chunk 2"

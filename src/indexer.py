@@ -16,15 +16,7 @@ _CHUNK_SIZE = 3000
 
 
 class WikiIndexer:
-    """Indexes wiki pages in Qdrant for semantic search.
-
-    Async methods (index_page_async, search_async, index_all_wiki_pages_async)
-    are the primary interface. Sync methods (index_page, search,
-    index_all_wiki_pages) exist only for legacy callers and wrap async
-    via asyncio.run(). The vector_store must be async-native
-    (QdrantStore or test double) — sync callers wrap it with
-    SyncVectorStore at construction time.
-    """
+    """Indexes wiki pages in Qdrant for semantic search."""
 
     COLLECTION_NAME = "personal_wiki"
 
@@ -134,18 +126,6 @@ class WikiIndexer:
         )
         logger.info(f"Successfully indexed {page_path.name} ({len(points)} points)")
 
-    def index_page(self, page_path: Path) -> None:
-        """Synchronously embed and index a wiki page (legacy wrapper).
-
-        For sync callers that create WikiIndexer without an injected
-        vector_store, a raw QdrantStore is lazy-initialized. The
-        asyncio.run() boundary is safe here because sync callers
-        don't have an active event loop.
-        """
-        if self.vector_store is None:
-            self.vector_store = QdrantStore(url="http://localhost:6333")
-        asyncio.run(self.index_page_async(page_path))
-
     async def index_all_wiki_pages_async(self) -> int:
         """Index all markdown files in the wiki directory with concurrency limiting."""
         indexed = 0
@@ -168,12 +148,6 @@ class WikiIndexer:
         indexed = sum(results)
         logger.info(f"Indexed {indexed} wiki pages")
         return indexed
-
-    def index_all_wiki_pages(self) -> int:
-        """Synchronously index all markdown files in the wiki directory."""
-        if self.vector_store is None:
-            self.vector_store = QdrantStore(url="http://localhost:6333")
-        return asyncio.run(self.index_all_wiki_pages_async())
 
     async def search_async(self, query: str, top_k: int = 10) -> list[dict]:
         """Asynchronously search for relevant wiki pages."""
@@ -204,9 +178,3 @@ class WikiIndexer:
         result_dicts = sorted(best.values(), key=lambda r: r["score"], reverse=True)[:top_k]
         logger.info(f"Async search returned {len(result_dicts)} results")
         return result_dicts
-
-    def search(self, query: str, top_k: int = 10) -> list[dict]:
-        """Synchronously search for relevant wiki pages (legacy wrapper)."""
-        if self.vector_store is None:
-            self.vector_store = QdrantStore(url="http://localhost:6333")
-        return asyncio.run(self.search_async(query, top_k))

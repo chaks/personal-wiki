@@ -8,7 +8,7 @@ class FakeIndexer:
     def __init__(self):
         self.indexed = []
 
-    def index_page(self, page_path: Path) -> None:
+    async def index_page_async(self, page_path: Path) -> None:
         self.indexed.append(page_path)
 
 

@@ -23,21 +23,6 @@ class ChatEngine:
         self.llm_provider = llm_provider or OllamaProvider()
         logger.debug(f"ChatEngine initialized with wiki_dir={wiki_dir}, llm_provider={type(self.llm_provider).__name__}")
 
-    def search(self, query: str, top_k: int = 5) -> list[dict]:
-        """Search wiki for relevant context."""
-        logger.info(f"Search request: query='{query[:50]}...', top_k={top_k}")
-        try:
-            results = self.indexer.search(query, top_k)
-            if results:
-                logger.info(f"Vector search found {len(results)} results")
-            else:
-                logger.debug("Vector search returned no results")
-            return results
-        except Exception as e:
-            logger.warning(f"Vector search failed: {e}, falling back to keyword search")
-            # Fallback: keyword search over wiki files
-            return self._keyword_search(query, top_k)
-
     def _keyword_search(self, query: str, top_k: int) -> list[dict]:
         """Simple keyword search as fallback."""
         logger.debug(f"Starting keyword search for: {query[:50]}...")
