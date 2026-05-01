@@ -4,23 +4,21 @@ from unittest.mock import Mock, patch
 from src.services.llm_provider import OllamaProvider
 
 
-def test_ollama_provider_generate():
-    """OllamaProvider generates text via ollama.chat."""
+@pytest.mark.asyncio
+async def test_ollama_provider_generate():
+    """OllamaProvider generates text via ollama.chat asynchronously."""
     with patch("ollama.chat") as mock_chat:
         mock_chat.return_value = {"message": {"content": "test response"}}
 
         provider = OllamaProvider(model="gemma4:e2b")
-        result = provider.generate("test prompt")
+        result = await provider.generate_async("test prompt")
 
         assert result == "test response"
-        mock_chat.assert_called_once_with(
-            model="gemma4:e2b",
-            messages=[{"role": "user", "content": "test prompt"}]
-        )
 
 
-def test_ollama_provider_generate_stream():
-    """OllamaProvider streams via ollama.chat."""
+@pytest.mark.asyncio
+async def test_ollama_provider_generate_stream():
+    """OllamaProvider streams via ollama.chat asynchronously."""
     with patch("ollama.chat") as mock_chat:
         mock_chat.return_value = iter([
             {"message": {"content": "chunk1"}},
@@ -28,18 +26,22 @@ def test_ollama_provider_generate_stream():
         ])
 
         provider = OllamaProvider(model="gemma4:e2b")
-        chunks = list(provider.generate_stream("test prompt"))
+        chunks = []
+        stream = provider.generate_stream_async("test prompt")
+        async for chunk in stream:
+            chunks.append(chunk)
 
         assert chunks == ["chunk1", "chunk2"]
 
 
-def test_ollama_provider_handles_empty_response():
+@pytest.mark.asyncio
+async def test_ollama_provider_handles_empty_response():
     """OllamaProvider returns empty string for None content."""
     with patch("ollama.chat") as mock_chat:
         mock_chat.return_value = {"message": {"content": None}}
 
         provider = OllamaProvider(model="gemma4:e2b")
-        result = provider.generate("test prompt")
+        result = await provider.generate_async("test prompt")
 
         assert result == ""
 

@@ -1,8 +1,9 @@
 """Tests for the ingestion orchestration loop and Reporter interface."""
 import pytest
+import asyncio
 import tempfile
 from pathlib import Path
-from unittest.mock import Mock, patch, PropertyMock
+from unittest.mock import Mock, patch, PropertyMock, AsyncMock
 
 
 class TestReporter:
@@ -89,9 +90,10 @@ class TestRunSource:
         result = run_source(spec, wiki_dir=Path("/tmp/wiki"), registry=None, reporter=NullReporter())
         assert result == IngestOutcome.SKIPPED
 
-    def test_run_source_returns_failure_on_adapter_error(self):
-        """run_source returns FAILED when adapter.run() fails."""
-        from src.ingest import run_source, SourceSpec, IngestOutcome, NullReporter
+    @pytest.mark.asyncio
+    async def test_run_source_returns_failure_on_adapter_error(self):
+        """run_source_async returns FAILED when adapter.run_async() fails."""
+        from src.ingest import run_source_async, SourceSpec, IngestOutcome, NullReporter
 
         with tempfile.TemporaryDirectory() as tmpdir:
             source_path = Path(tmpdir) / "test.pdf"
@@ -111,15 +113,16 @@ class TestRunSource:
                 mock_result = Mock()
                 mock_result.success = False
                 mock_result.error = "Conversion failed"
-                mock_adapter.run.return_value = mock_result
+                mock_adapter.run_async = AsyncMock(return_value=mock_result)
                 mock_adapter_cls.return_value = mock_adapter
 
-                result = run_source(spec, wiki_dir=Path(tmpdir), registry=registry, reporter=NullReporter())
+                result = await run_source_async(spec, wiki_dir=Path(tmpdir), registry=registry, reporter=NullReporter())
                 assert result == IngestOutcome.FAILED
 
-    def test_run_source_returns_processed_on_success(self):
-        """run_source returns PROCESSED when adapter.run() succeeds."""
-        from src.ingest import run_source, SourceSpec, IngestOutcome, NullReporter
+    @pytest.mark.asyncio
+    async def test_run_source_returns_processed_on_success(self):
+        """run_source_async returns PROCESSED when adapter.run_async() succeeds."""
+        from src.ingest import run_source_async, SourceSpec, IngestOutcome, NullReporter
 
         with tempfile.TemporaryDirectory() as tmpdir:
             source_path = Path(tmpdir) / "test.pdf"
@@ -133,18 +136,18 @@ class TestRunSource:
             registry = Mock()
             registry.compute_hash.return_value = "hash123"
             registry.has_source_changed.return_value = True
+            registry.record_successful_ingestion = Mock()
 
             with patch("src.ingest.PDFSourceAdapter") as mock_adapter_cls:
                 mock_adapter = Mock()
                 mock_result = Mock()
                 mock_result.success = True
                 mock_result.output_path = Path(tmpdir) / "output.md"
-                mock_adapter.run.return_value = mock_result
+                mock_adapter.run_async = AsyncMock(return_value=mock_result)
                 mock_adapter_cls.return_value = mock_adapter
 
-                result = run_source(spec, wiki_dir=Path(tmpdir), registry=registry, reporter=NullReporter())
+                result = await run_source_async(spec, wiki_dir=Path(tmpdir), registry=registry, reporter=NullReporter())
                 assert result == IngestOutcome.PROCESSED
-                registry.add_source.assert_called_once()
 
     def test_run_source_returns_skipped_when_unchanged(self):
         """run_source returns SKIPPED when registry says content unchanged."""

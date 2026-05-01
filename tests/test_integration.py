@@ -37,12 +37,15 @@ This is a test concept about testing.
 
 
 def test_health_check(full_app):
-    """Test: health endpoint returns OK."""
+    """Test: health endpoint returns status info."""
     client = TestClient(full_app)
 
     response = client.get("/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
+    data = response.json()
+    assert "ollama" in data
+    assert "qdrant" in data
+    assert "is_healthy" in data
 
 
 def test_static_files_served(full_app):

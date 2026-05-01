@@ -1,24 +1,8 @@
 """Tests for URLSourceAdapter."""
 import pytest
-from unittest.mock import patch, Mock
+from unittest.mock import patch, Mock, AsyncMock
 from pathlib import Path
 import tempfile
-
-
-@patch("src.ingestion.adapters.URLSourceAdapter.first_stage")
-def test_url_adapter_delegates_to_pipeline(mock_first_stage):
-    """URLSourceAdapter.run() builds and runs the pipeline."""
-    from src.ingestion.adapters import URLSourceAdapter
-    from src.ingestion_result import IngestionResult
-
-    with tempfile.TemporaryDirectory() as tmpdir:
-        wiki_dir = Path(tmpdir)
-        adapter = URLSourceAdapter(url="https://example.com/article", wiki_dir=wiki_dir)
-
-        # The adapter's run() method is tested in integration via PDFSourceAdapter tests
-        # Here we verify the adapter is constructible and has the expected attributes
-        assert adapter.url == "https://example.com/article"
-        assert adapter.timeout == 30.0
 
 
 def test_url_adapter_attributes():
@@ -51,9 +35,10 @@ def test_code_adapter_attributes():
         assert adapter.extensions == [".py"]
 
 
-@patch("src.ingestion.adapters.URLSourceAdapter.run")
-def test_url_adapter_returns_failure(mock_run):
-    """URLSourceAdapter.run() returns failure on HTTP error."""
+@pytest.mark.asyncio
+@patch("src.ingestion.adapters.URLSourceAdapter.run_async")
+async def test_url_adapter_returns_failure(mock_run):
+    """URLSourceAdapter.run_async() returns failure on HTTP error."""
     from src.ingestion.adapters import URLSourceAdapter
     from src.ingestion_result import IngestionResult
 
@@ -66,15 +51,16 @@ def test_url_adapter_returns_failure(mock_run):
     with tempfile.TemporaryDirectory() as tmpdir:
         wiki_dir = Path(tmpdir)
         adapter = URLSourceAdapter(url="https://example.com/missing", wiki_dir=wiki_dir)
-        result = adapter.run()
+        result = await adapter.run_async()
 
         assert result.success is False
         assert "404" in result.error
 
 
-@patch("src.ingestion.adapters.CodeSourceAdapter.run")
-def test_code_adapter_returns_failure(mock_run):
-    """CodeSourceAdapter.run() returns failure on scan error."""
+@pytest.mark.asyncio
+@patch("src.ingestion.adapters.CodeSourceAdapter.run_async")
+async def test_code_adapter_returns_failure(mock_run):
+    """CodeSourceAdapter.run_async() returns failure on scan error."""
     from src.ingestion.adapters import CodeSourceAdapter
     from src.ingestion_result import IngestionResult
 
@@ -89,7 +75,7 @@ def test_code_adapter_returns_failure(mock_run):
         code_dir = Path(tmpdir) / "code"
         code_dir.mkdir()
         adapter = CodeSourceAdapter(code_dir=code_dir, wiki_dir=wiki_dir, language="python")
-        result = adapter.run()
+        result = await adapter.run_async()
 
         assert result.success is False
         assert "Scan failed" in result.error

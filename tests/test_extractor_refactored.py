@@ -20,15 +20,18 @@ class MockLLMProvider(LLMProvider):
         return self.response
 
     async def generate_stream_async(self, prompt: str, system: Optional[str] = None):
-        yield self.response
+        async def gen():
+            yield self.response
+        return gen()
 
 
-def test_extractor_uses_llm_provider():
+@pytest.mark.asyncio
+async def test_extractor_uses_llm_provider():
     """EntityExtractor uses injected LLM provider."""
     mock_provider = MockLLMProvider(response="ENTITY: Test | type | description")
     extractor = EntityExtractor(llm_provider=mock_provider)
 
-    entities = extractor.extract("test document")
+    entities = await extractor.extract("test document")
 
     assert len(entities) == 1
     assert entities[0].name == "Test"
