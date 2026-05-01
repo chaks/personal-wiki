@@ -2,7 +2,7 @@
 import asyncio
 import time
 from collections import defaultdict
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -26,8 +26,14 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self.window_seconds = window_seconds
         # Track requests: {ip: [timestamp1, timestamp2, ...]}
         self._request_history: Dict[str, List[float]] = defaultdict(list)
-        self._lock = asyncio.Lock()
+        self._lock: Optional[asyncio.Lock] = None  # Created lazily
         self._request_count = 0
+
+    def _get_lock(self) -> asyncio.Lock:
+        """Get or create the asyncio lock lazily."""
+        if self._lock is None:
+            self._lock = asyncio.Lock()
+        return self._lock
 
     def _cleanup(self) -> None:
         """Remove IPs with no recent entries to prevent unbounded memory growth."""
@@ -112,7 +118,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         """
         client_ip = self._get_client_ip(request)
 
-        async with self._lock:
+        async with self._get_lock():
             self._maybe_cleanup()
             rate_limited = self._is_rate_limited(client_ip)
 
