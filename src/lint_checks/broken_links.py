@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Optional
 
 from src.utils import slugify
+from src.catalog import WikiPageCatalog
 
 logger = logging.getLogger(__name__)
 
@@ -41,18 +42,11 @@ class BrokenLinksChecker:
             wiki_dir: Root directory for the wiki
         """
         self.wiki_dir = Path(wiki_dir)
+        self.catalog = WikiPageCatalog(wiki_dir)
 
     def _find_all_wiki_pages(self) -> set[str]:
-        """Find all existing wiki page slugs.
-
-        Returns:
-            Set of all existing page slugs
-        """
-        existing_slugs: set[str] = set()
-        if self.wiki_dir.exists():
-            for md_file in self.wiki_dir.glob("**/*.md"):
-                existing_slugs.add(md_file.stem)
-        return existing_slugs
+        """Find all existing wiki page slugs using catalog."""
+        return self.catalog.find_existing_slugs()
 
     def _extract_wikilinks_with_positions(
         self, page_path: Path

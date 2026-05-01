@@ -28,32 +28,6 @@ class TestWikiLinterInitialization:
         assert linter.wiki_dir == wiki_dir
 
 
-class TestSlugify:
-    """Tests for _slugify method."""
-
-    def test_slugify_simple_name(self, linter):
-        """Slugify converts simple name to slug."""
-        assert linter._slugify("Andrej Karpathy") == "andrej-karpathy"
-
-    def test_slugify_lowercase(self, linter):
-        """Slugify converts to lowercase."""
-        assert linter._slugify("TEST") == "test"
-
-    def test_slugify_spaces(self, linter):
-        """Slugify replaces spaces with hyphens."""
-        assert linter._slugify("Deep Learning") == "deep-learning"
-
-    def test_slugify_special_characters(self, linter):
-        """Slugify removes special characters."""
-        assert linter._slugify("C++") == "c"
-        assert linter._slugify("Test/Path") == "test-path"
-
-    def test_slugify_preserves_alphanumeric(self, linter):
-        """Slugify preserves alphanumeric characters and hyphens."""
-        assert linter._slugify("GPT-4") == "gpt-4"
-        assert linter._slugify("Python_3") == "python_3"
-
-
 class TestOrphanDetection:
     """Tests for orphan page detection."""
 
@@ -132,7 +106,6 @@ class TestRunAllChecks:
 
         assert isinstance(results, dict)
         assert "orphans" in results
-        assert "contradictions" in results
         assert "stale_claims" in results
         assert "broken_links" in results
         assert "duplicates" in results
@@ -146,11 +119,6 @@ class TestRunAllChecks:
         results = linter.run_all_checks()
 
         # All results should be lists
-        assert isinstance(results["contradictions"], list)
         assert isinstance(results["stale_claims"], list)
         assert isinstance(results["broken_links"], list)
         assert isinstance(results["duplicates"], list)
-
-        # For a clean wiki with one page, most should be empty
-        # Contradictions always returns empty (NLP not implemented)
-        assert results["contradictions"] == []

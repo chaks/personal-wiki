@@ -130,7 +130,9 @@ class MockLLMProvider(LLMProvider):
         return self.response
 
     async def generate_stream_async(self, prompt: str, system: Optional[str] = None):
-        yield self.response
+        async def gen():
+            yield self.response
+        return gen()
 
 
 class ErrorProvider(LLMProvider):
@@ -143,13 +145,16 @@ class ErrorProvider(LLMProvider):
         raise Exception("API error")
 
     async def generate_stream_async(self, prompt: str, system: Optional[str] = None):
-        raise Exception("API error")
+        async def gen():
+            raise Exception("API error")
+        return gen()
 
 
 class TestEntityExtraction:
     """Tests for entity extraction functionality."""
 
-    def test_extract_entities_from_document(self, sample_document):
+    @pytest.mark.asyncio
+    async def test_extract_entities_from_document(self, sample_document):
         """Extract entities from a document using LLM."""
         mock_provider = MockLLMProvider(response="""
         ENTITY: Andrej Karpathy | person | Computer scientist at OpenAI and Tesla
@@ -160,32 +165,35 @@ class TestEntityExtraction:
         """)
 
         extractor = EntityExtractor(llm_provider=mock_provider)
-        entities = extractor.extract(sample_document, source_doc="test.md")
+        entities = await extractor.extract(sample_document, source_doc="test.md")
 
         assert len(entities) == 5
         assert entities[0].name == "Andrej Karpathy"
         assert entities[0].entity_type == "person"
         assert "Computer scientist" in entities[0].description
 
-    def test_extract_entities_handles_empty_response(self, sample_document):
+    @pytest.mark.asyncio
+    async def test_extract_entities_handles_empty_response(self, sample_document):
         """Extract returns empty list when LLM returns empty response."""
         mock_provider = MockLLMProvider(response="")
 
         extractor = EntityExtractor(llm_provider=mock_provider)
-        entities = extractor.extract(sample_document)
+        entities = await extractor.extract(sample_document)
 
         assert entities == []
 
-    def test_extract_entities_handles_malformed_response(self, sample_document):
+    @pytest.mark.asyncio
+    async def test_extract_entities_handles_malformed_response(self, sample_document):
         """Extract returns empty list when LLM returns malformed response."""
         mock_provider = MockLLMProvider(response="This is not properly formatted")
 
         extractor = EntityExtractor(llm_provider=mock_provider)
-        entities = extractor.extract(sample_document)
+        entities = await extractor.extract(sample_document)
 
         assert entities == []
 
-    def test_extract_entities_handles_api_error(self, sample_document):
+    @pytest.mark.asyncio
+    async def test_extract_entities_handles_api_error(self, sample_document):
         """Extract returns empty list when LLM API fails."""
         class ErrorProvider(LLMProvider):
             def health_check(self) -> bool:
@@ -193,10 +201,12 @@ class TestEntityExtraction:
             async def generate_async(self, prompt: str, system: Optional[str] = None) -> str:
                 raise Exception("API error")
             async def generate_stream_async(self, prompt: str, system: Optional[str] = None):
-                raise Exception("API error")
+                async def gen():
+                    raise Exception("API error")
+                return gen()
 
         extractor = EntityExtractor(llm_provider=ErrorProvider())
-        entities = extractor.extract(sample_document)
+        entities = await extractor.extract(sample_document)
 
         assert entities == []
 
@@ -244,7 +254,8 @@ class TestEntityExtraction:
 class TestConceptExtraction:
     """Tests for concept extraction functionality."""
 
-    def test_extract_concepts_from_document(self, sample_document):
+    @pytest.mark.asyncio
+    async def test_extract_concepts_from_document(self, sample_document):
         """Extract concepts from a document using LLM."""
         mock_provider = MockLLMProvider(response="""
         CONCEPT: Deep Learning | Subset of ML using neural networks | Andrej Karpathy, OpenAI
@@ -253,23 +264,25 @@ class TestConceptExtraction:
         """)
 
         extractor = EntityExtractor(llm_provider=mock_provider)
-        concepts = extractor.extract_concepts(sample_document, source_doc="test.md")
+        concepts = await extractor.extract_concepts(sample_document, source_doc="test.md")
 
         assert len(concepts) == 3
         assert concepts[0].name == "Deep Learning"
         assert "neural networks" in concepts[0].definition
         assert "Andrej Karpathy" in concepts[0].related_entities
 
-    def test_extract_concepts_handles_empty_response(self, sample_document):
+    @pytest.mark.asyncio
+    async def test_extract_concepts_handles_empty_response(self, sample_document):
         """Extract concepts returns empty list when LLM returns empty response."""
         mock_provider = MockLLMProvider(response="")
 
         extractor = EntityExtractor(llm_provider=mock_provider)
-        concepts = extractor.extract_concepts(sample_document)
+        concepts = await extractor.extract_concepts(sample_document)
 
         assert concepts == []
 
-    def test_extract_concepts_handles_api_error(self, sample_document):
+    @pytest.mark.asyncio
+    async def test_extract_concepts_handles_api_error(self, sample_document):
         """Extract concepts returns empty list when LLM API fails."""
         class ErrorProvider(LLMProvider):
             def health_check(self) -> bool:
@@ -277,10 +290,12 @@ class TestConceptExtraction:
             async def generate_async(self, prompt: str, system: Optional[str] = None) -> str:
                 raise Exception("API error")
             async def generate_stream_async(self, prompt: str, system: Optional[str] = None):
-                raise Exception("API error")
+                async def gen():
+                    raise Exception("API error")
+                return gen()
 
         extractor = EntityExtractor(llm_provider=ErrorProvider())
-        concepts = extractor.extract_concepts(sample_document)
+        concepts = await extractor.extract_concepts(sample_document)
 
         assert concepts == []
 
@@ -337,18 +352,20 @@ class TestConceptExtraction:
 class TestLogging:
     """Tests for logging behavior."""
 
-    def test_extraction_logs_success(self, caplog, sample_document):
+    @pytest.mark.asyncio
+    async def test_extraction_logs_success(self, caplog, sample_document):
         """Extraction logs info message on success."""
         import logging
         mock_provider = MockLLMProvider(response="ENTITY: Test | person | Description")
 
         extractor = EntityExtractor(llm_provider=mock_provider)
         with caplog.at_level(logging.INFO):
-            extractor.extract(sample_document)
+            await extractor.extract(sample_document)
 
         assert "Extracted 1 unique entities" in caplog.text
 
-    def test_extraction_logs_error(self, caplog, sample_document):
+    @pytest.mark.asyncio
+    async def test_extraction_logs_error(self, caplog, sample_document):
         """Extraction logs error on failure."""
         import logging
 
@@ -358,10 +375,12 @@ class TestLogging:
             async def generate_async(self, prompt: str, system: Optional[str] = None) -> str:
                 raise Exception("Test error")
             async def generate_stream_async(self, prompt: str, system: Optional[str] = None):
-                raise Exception("Test error")
+                async def gen():
+                    raise Exception("Test error")
+                return gen()
 
         extractor = EntityExtractor(llm_provider=TestErrorProvider())
         with caplog.at_level(logging.ERROR):
-            extractor.extract(sample_document)
+            await extractor.extract(sample_document)
 
         assert "entity extraction failed" in caplog.text.lower()

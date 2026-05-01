@@ -1,5 +1,4 @@
 """Copy-only markdown adapter — copies markdown files and indexes them."""
-import asyncio
 import logging
 from pathlib import Path
 from typing import Optional
@@ -28,7 +27,8 @@ class MarkdownCopyAdapter:
         self.wiki_dir = Path(wiki_dir)
         self._indexer = indexer
 
-    def run(self) -> IngestionResult:
+    async def run_async(self) -> IngestionResult:
+        """Copy markdown and index asynchronously."""
         logger.info(f"Copying markdown: {self.source_path}")
         try:
             if not self.source_path.exists():
@@ -45,7 +45,7 @@ class MarkdownCopyAdapter:
 
             indexer = self._get_indexer()
             if indexer:
-                asyncio.run(indexer.index_page_async(output_path))
+                await indexer.index_page_async(output_path)
                 logger.info(f"Indexed {output_path}")
 
             return IngestionResult(
@@ -60,6 +60,11 @@ class MarkdownCopyAdapter:
                 error=str(e),
             )
 
+    def run(self) -> IngestionResult:
+        """Sync wrapper for run_async (deprecated, use run_async)."""
+        import asyncio
+        return asyncio.run(self.run_async())
+
     def _compute_output_path(self) -> Path:
         """Compute the wiki output path, preserving relative structure.
 
@@ -71,10 +76,9 @@ class MarkdownCopyAdapter:
         return self.wiki_dir / rel
 
     def _get_indexer(self) -> Optional[WikiIndexer]:
+        """Get indexer if available."""
         if self._indexer is not None:
             return self._indexer
-        from src.services.embedding_provider import OllamaEmbeddingProvider
-        return WikiIndexer(
-            self.wiki_dir,
-            embedding_provider=OllamaEmbeddingProvider(),
-        )
+        # Do not create default indexer without vector_store
+        # Caller must wire dependencies properly
+        return None

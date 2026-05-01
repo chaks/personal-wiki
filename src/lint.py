@@ -8,6 +8,7 @@ from typing import Optional
 from src.lint_checks.broken_links import BrokenLinksChecker
 from src.lint_checks.duplicates import DuplicateContentChecker
 from src.lint_checks.stale_claims import StaleClaimsChecker
+from src.catalog import WikiPageCatalog
 from src.utils import slugify
 
 logger = logging.getLogger(__name__)
@@ -25,18 +26,11 @@ class WikiLinter:
             wiki_dir: Root directory for the wiki
         """
         self.wiki_dir = Path(wiki_dir)
+        self.catalog = WikiPageCatalog(wiki_dir)
 
     def _find_all_wiki_pages(self) -> list[Path]:
-        """Find all wiki pages in the wiki directory.
-
-        Returns:
-            List of paths to all .md files in the wiki
-        """
-        pages = []
-        if self.wiki_dir.exists():
-            for pattern in ["**/*.md"]:
-                pages.extend(self.wiki_dir.glob(pattern))
-        return pages
+        """Find all wiki pages using catalog."""
+        return self.catalog.find_all_pages()
 
     def _extract_wikilinks(self, page_path: Path) -> set[str]:
         """Extract all wikilink titles from a page.
@@ -71,17 +65,6 @@ class WikiLinter:
             The slug (filename without .md extension)
         """
         return page_path.stem
-
-    def _slugify(self, name: str) -> str:
-        """Convert name to safe filename.
-
-        Args:
-            name: The name to convert to a slug
-
-        Returns:
-            A slugified version of the name suitable for filenames
-        """
-        return slugify(name)
 
     def check_orphans(self) -> list[Path]:
         """Find pages with no incoming wikilinks.

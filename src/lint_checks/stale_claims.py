@@ -7,6 +7,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
+from src.catalog import WikiPageCatalog
+
 logger = logging.getLogger(__name__)
 
 
@@ -55,17 +57,11 @@ class StaleClaimsChecker:
         """
         self.wiki_dir = Path(wiki_dir)
         self.max_age_days = max_age_days
+        self.catalog = WikiPageCatalog(wiki_dir)
 
     def _find_all_wiki_pages(self) -> list[Path]:
-        """Find all wiki pages.
-
-        Returns:
-            List of paths to all .md files
-        """
-        pages: list[Path] = []
-        if self.wiki_dir.exists():
-            pages = sorted(self.wiki_dir.glob("**/*.md"))
-        return pages
+        """Find all wiki pages using catalog."""
+        return self.catalog.find_all_pages()
 
     def _extract_dates_from_content(
         self, content: str

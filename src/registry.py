@@ -187,6 +187,54 @@ class SourceRegistry:
             entry.wiki_pages.append(wiki_path)
             self._save()
 
+    def record_successful_ingestion(
+        self,
+        source_id: str,
+        source_type: str,
+        path: str,
+        content_hash: str,
+        tags: Optional[list[str]] = None,
+        wiki_page_path: Optional[str] = None,
+        url: Optional[str] = None,
+    ) -> SourceEntry:
+        """Record successful ingestion in one call.
+
+        Combines add_source, link_wiki_page, and update_status into
+        a single operation for successful ingestions.
+
+        Args:
+            source_id: Unique source identifier
+            source_type: Type of source (pdf, url, markdown, code)
+            path: Source file path
+            content_hash: SHA256 hash of source content
+            tags: Optional tags
+            wiki_page_path: Path to generated wiki page
+            url: Optional URL for url-type sources
+
+        Returns:
+            The created SourceEntry
+        """
+        logger.info(f"Recording successful ingestion: {source_id}")
+
+        # Step 1: Add source
+        entry = self.add_source(
+            source_id=source_id,
+            source_type=source_type,
+            path=path,
+            content_hash=content_hash,
+            url=url,
+            tags=tags or [],
+        )
+
+        # Step 2: Link wiki page
+        if wiki_page_path:
+            self.link_wiki_page(source_id, wiki_page_path)
+
+        # Step 3: Update status
+        self.update_status(source_id, SourceStatus.PROCESSED)
+
+        return entry
+
 
 # --- Wiki browsing utilities ---
 

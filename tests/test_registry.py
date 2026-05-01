@@ -83,3 +83,22 @@ def test_get_all_sources(registry_path):
     registry.add_source("test2", "pdf", "sources/test2.pdf", "hash2")
     sources = registry.get_all_sources()
     assert len(sources) == 2
+
+
+def test_record_successful_ingestion(registry_path):
+    """SourceRegistry.record_successful_ingestion does 3-step dance."""
+    registry = SourceRegistry(registry_path)
+
+    registry.record_successful_ingestion(
+        source_id="test:pdf",
+        source_type="pdf",
+        path="/path/to/file.pdf",
+        content_hash="abc123",
+        tags=["test"],
+        wiki_page_path="/wiki/generated/test.md",
+    )
+
+    entry = registry.get_source("test:pdf")
+    assert entry is not None
+    assert entry.status == SourceStatus.PROCESSED
+    assert "/wiki/generated/test.md" in entry.wiki_pages

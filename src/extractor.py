@@ -1,5 +1,4 @@
 """LLM-based entity and concept extraction using Ollama."""
-import asyncio
 import json
 import logging
 import re
@@ -151,8 +150,8 @@ Rules:
         second = document[mid_start:mid_start + _EXTRACT_CHUNK_SIZE // 2]
         return first + "\n...\n" + second
 
-    def extract(self, document: str, source_doc: Optional[str] = None) -> list[Entity]:
-        """Extract entities from a document using LLM.
+    async def extract(self, document: str, source_doc: Optional[str] = None) -> list[Entity]:
+        """Extract entities from a document using LLM (async).
 
         Args:
             document: The document text to extract entities from
@@ -165,10 +164,8 @@ Rules:
             chunk = self._get_document_chunk(document)
             prompt = self.entity_prompt.format(document=chunk)
 
-            raw_text = asyncio.run(
-                self.llm_provider.generate_async(
-                    prompt, system=self.ENTITY_SYSTEM
-                )
+            raw_text = await self.llm_provider.generate_async(
+                prompt, system=self.ENTITY_SYSTEM
             )
 
             entities = self._parse_entities(raw_text)
@@ -190,10 +187,10 @@ Rules:
             logger.error(f"Entity extraction failed: {e}")
             return []
 
-    def extract_concepts(
+    async def extract_concepts(
         self, document: str, source_doc: Optional[str] = None
     ) -> list[Concept]:
-        """Extract concepts from a document using LLM.
+        """Extract concepts from a document using LLM (async).
 
         Args:
             document: The document text to extract concepts from
@@ -206,10 +203,8 @@ Rules:
             chunk = self._get_document_chunk(document)
             prompt = self.concept_prompt.format(document=chunk)
 
-            raw_text = asyncio.run(
-                self.llm_provider.generate_async(
-                    prompt, system=self.CONCEPT_SYSTEM
-                )
+            raw_text = await self.llm_provider.generate_async(
+                prompt, system=self.CONCEPT_SYSTEM
             )
 
             concepts = self._parse_concepts(raw_text)

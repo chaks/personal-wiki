@@ -105,37 +105,6 @@ class TestExtractLinks:
         assert links == ["Entity A", "Entity B"]
 
 
-class TestSlugify:
-    """Tests for _slugify method."""
-
-    @pytest.mark.parametrize("name,expected", [
-        ("Simple Name", "simple-name"),
-        ("Name With Spaces", "name-with-spaces"),
-        ("Name/With/Slashes", "name-with-slashes"),
-        ("Name@With#Special$Chars", "namewithspecialchars"),
-        ("Mixed123Numbers", "mixed123numbers"),
-        ("", ""),
-        ("UPPERCASE", "uppercase"),
-        ("lowercase", "lowercase"),
-        ("  Multiple   Spaces  ", "--multiple---spaces--"),
-    ])
-    def test_slugify_various_inputs(self, resolver, name, expected):
-        """_slugify handles various input formats correctly."""
-        assert resolver._slugify(name) == expected
-
-    def test_slugify_special_characters(self, resolver):
-        """_slugify removes special characters correctly."""
-        assert resolver._slugify("Test!@#$%^&*()Entity") == "testentity"
-
-    def test_slugify_empty_string(self, resolver):
-        """_slugify returns empty string for empty input."""
-        assert resolver._slugify("") == ""
-
-    def test_slugify_spaces_and_slashes(self, resolver):
-        """_slugify converts spaces and slashes to hyphens."""
-        assert resolver._slugify("My Entity/Test") == "my-entity-test"
-
-
 class TestPageExists:
     """Tests for page_exists method."""
 

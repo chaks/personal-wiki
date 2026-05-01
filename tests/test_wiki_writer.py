@@ -62,32 +62,6 @@ class TestWikiPageWriterInitialization:
         assert writer.documents_dir == wiki_dir / "documents"
 
 
-class TestSlugify:
-    """Tests for _slugify method."""
-
-    def test_slugify_simple_name(self, writer):
-        """Slugify converts simple name to slug."""
-        assert writer._slugify("Andrej Karpathy") == "andrej-karpathy"
-
-    def test_slugify_lowercase(self, writer):
-        """Slugify converts to lowercase."""
-        assert writer._slugify("TEST") == "test"
-
-    def test_slugify_spaces(self, writer):
-        """Slugify replaces spaces with hyphens."""
-        assert writer._slugify("Deep Learning") == "deep-learning"
-
-    def test_slugify_special_characters(self, writer):
-        """Slugify removes special characters."""
-        assert writer._slugify("C++") == "c"
-        assert writer._slugify("Test/Path") == "test-path"
-
-    def test_slugify_preserves_alphanumeric(self, writer):
-        """Slugify preserves alphanumeric characters and hyphens."""
-        assert writer._slugify("GPT-4") == "gpt-4"
-        assert writer._slugify("Python_3") == "python_3"
-
-
 class TestWriteEntityPage:
     """Tests for write_entity method."""
 

@@ -16,6 +16,9 @@ from src.link_resolver import LinkResolver
 from src.indexer import WikiIndexer
 from src.services.embedding_provider import OllamaEmbeddingProvider
 from src.ingestion_result import IngestionResult
+from src.services.pipeline_stages import (
+    ExtractStage, WriteStage, ResolveStage, IndexStage
+)
 
 logger = logging.getLogger(__name__)
 
@@ -41,44 +44,58 @@ class SourceAdapter(ABC):
         """Perform type-specific first step. Return (content, output_path)."""
         ...
 
-    def run(self) -> IngestionResult:
+    async def run_async(
+        self,
+        extract_stage: Optional[ExtractStage] = None,
+        write_stage: Optional[WriteStage] = None,
+        resolve_stage: Optional[ResolveStage] = None,
+        index_stage: Optional[IndexStage] = None,
+    ) -> IngestionResult:
+        """Run the ingestion pipeline with injected stages.
+
+        Args:
+            extract_stage: Entity/concept extraction stage
+            write_stage: Wiki page writing stage
+            resolve_stage: Link resolution stage
+            index_stage: Semantic indexing stage
+
+        Returns:
+            IngestionResult with output paths or error
+        """
         logger.info(f"Starting pipeline for adapter: {self.__class__.__name__}")
         try:
             self._ensure_dirs()
 
             content, output_path = self.convert()
 
-            extractor = EntityExtractor(model=self.model, schema_path=self.schema_path)
-            entities = extractor.extract(content, source_doc=str(output_path))
-            concepts = extractor.extract_concepts(content, source_doc=str(output_path))
-            logger.info(f"Extracted {len(entities)} entities and {len(concepts)} concepts")
+            # Extract stage
+            if extract_stage:
+                entities, concepts = await extract_stage.extract_async(
+                    content, str(output_path)
+                )
+                logger.info(f"Extracted {len(entities)} entities and {len(concepts)} concepts")
+            else:
+                entities, concepts = [], []
 
-            writer = WikiPageWriter(self.wiki_dir)
-            entity_pages = [
-                path for path in (writer.write_entity(e) for e in entities if e)
-                if path is not None
-            ]
-            concept_pages = [
-                path for path in (writer.write_concept(c) for c in concepts if c)
-                if path is not None
-            ]
-            logger.info(f"Created {len(entity_pages)} entity pages, {len(concept_pages)} concept pages")
+            # Write stage
+            if write_stage:
+                entity_pages, concept_pages = await write_stage.write_async(
+                    entities, concepts
+                )
+                logger.info(f"Created {len(entity_pages)} entity pages, {len(concept_pages)} concept pages")
+            else:
+                entity_pages, concept_pages = [], []
 
-            resolver = LinkResolver(self.wiki_dir)
-            resolver.resolve_all(output_path)
-            logger.info("Link resolution complete")
+            # Resolve stage
+            if resolve_stage:
+                await resolve_stage.resolve_async(output_path)
+                logger.info("Link resolution complete")
 
-            embedding_provider = OllamaEmbeddingProvider()
-            indexer = WikiIndexer(self.wiki_dir, embedding_provider=embedding_provider)
+            # Index stage
             all_pages = [output_path] + entity_pages + concept_pages
-            indexed_count = 0
-            for page_path in all_pages:
-                try:
-                    asyncio.run(indexer.index_page_async(page_path))
-                    indexed_count += 1
-                except Exception as e:
-                    logger.warning(f"Failed to index {page_path}: {e}")
-            logger.info(f"Indexed {indexed_count} pages")
+            if index_stage:
+                indexed_count = await index_stage.index_async(all_pages)
+                logger.info(f"Indexed {indexed_count} pages")
 
             return IngestionResult(
                 success=True,
@@ -93,6 +110,21 @@ class SourceAdapter(ABC):
                 output_path=None,
                 error=str(e),
             )
+
+    async def run(
+        self,
+        extract_stage: Optional[ExtractStage] = None,
+        write_stage: Optional[WriteStage] = None,
+        resolve_stage: Optional[ResolveStage] = None,
+        index_stage: Optional[IndexStage] = None,
+    ) -> IngestionResult:
+        """Run the ingestion pipeline (deprecated sync wrapper, use run_async)."""
+        return await self.run_async(
+            extract_stage=extract_stage,
+            write_stage=write_stage,
+            resolve_stage=resolve_stage,
+            index_stage=index_stage,
+        )
 
     @abstractmethod
     def _ensure_dirs(self): ...

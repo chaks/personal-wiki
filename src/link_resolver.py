@@ -168,7 +168,3 @@ class LinkResolver:
 
         logger.info(f"Resolved {len(created_paths)} missing links in {page_path}")
         return created_paths
-
-    def _slugify(self, name: str) -> str:
-        """Convert name to safe filename."""
-        return slugify(name)
