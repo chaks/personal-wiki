@@ -309,3 +309,7 @@ async def main_async():
 def main():
     """Entry point — owns event loop."""
     asyncio.run(main_async())
+
+
+if __name__ == "__main__":
+    main()
