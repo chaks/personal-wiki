@@ -371,6 +371,7 @@ const connections = [
   { from: 'cli',         to: 'fastapi',     color: '#f97316' },
   { from: 'fastapi',     to: 'pipeline',    color: '#f97316' },
   { from: 'pipeline',    to: 'llm',         color: '#f97316' },
+  { from: 'llm',         to: 'ollama',      color: '#f97316' },
   { from: 'pipeline',    to: 'wikifs',      color: '#f97316' },
   { from: 'pipeline',    to: 'indexer',     color: '#f97316' },
   { from: 'pipeline',    to: 'registry',    color: '#f97316', dashed: true },
@@ -390,7 +391,7 @@ function portPos(id, side) {
   if (side === 'left') return { x: rect.left - svgRect.left, y: rect.top + rect.height / 2 - svgRect.top };
 }
 
-function buildPath(from, to, route) {
+function buildPath(from, to, route, offsetX = 0) {
   // Special: side-right route (upward sweep along right edge)
   if (route === 'side-right') {
     const src = portPos(from, 'right');
@@ -421,6 +422,11 @@ function buildPath(from, to, route) {
 
   const dy = Math.abs(ty - sy);
   const cp = Math.max(dy * 0.45, 20);
+
+  // apply horizontal offset at source only — both arrows converge at the same target
+  if (offsetX) {
+    return `M ${sx + offsetX} ${sy} C ${sx + offsetX} ${sy + cp}, ${tx} ${ty - cp}, ${tx} ${ty}`;
+  }
   return `M ${sx} ${sy} C ${sx} ${sy + cp}, ${tx} ${ty - cp}, ${tx} ${ty}`;
 }
 
@@ -430,7 +436,7 @@ function renderPaths() {
   svg.querySelectorAll('.conn-path, .conn-dot').forEach(n => n.remove());
 
   connections.forEach((c, i) => {
-    const d = buildPath(c.from, c.to, c.route);
+    const d = buildPath(c.from, c.to, c.route, c.offsetX || 0);
     if (!d) return;
 
     // path — set ID BEFORE appending so mpath can reference it
