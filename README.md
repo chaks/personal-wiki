@@ -16,8 +16,8 @@ A local AI-powered chat assistant that queries a persistent knowledge wiki built
 - **Markdown Rendering**: Rich markdown (headings, bold, tables, code blocks) in chat responses
 - **Async Pipeline**: Full async vector store, indexer, and LLM layers with sync wrappers
 - **Wiki Maintenance**: LLM-generated markdown with entities, concepts, and cross-links
-- **Wiki Lint**: 5 comprehensive checks (broken links, duplicates, contradictions, stale claims)
-- **Security**: API key authentication, rate limiting, prompt injection protection
+- **Wiki Lint**: Checks for broken links, duplicates, and stale claims
+- **Security**: API key authentication, rate limiting, path validation, prompt injection protection
 - **Health Checks**: Centralized service health endpoint (Ollama + Qdrant + App)
 
 ## Architecture
@@ -39,11 +39,13 @@ The ingestion pipeline creates three types of pages:
 
 ### Service Layers
 
-- `src/services/` — Provider abstractions: `LLMProvider`, `EmbeddingProvider`, `VectorStore`
-- `src/ingestion/` — `SourceAdapter` ABC with concrete adapters (`PDFSourceAdapter`, `URLSourceAdapter`, `CodeSourceAdapter`) wired to shared pipeline stages
-- `src/pipeline/` — Stage definitions (`ConvertStage`, `ExtractStage`, `WriteStage`, `ResolveStage`, `IndexStage`) with injected dependencies
+- `src/services/` — Provider abstractions: `LLMProvider`, `EmbeddingProvider`, `VectorStore`, pipeline stages
+- `src/ingestion/` — `SourceAdapter` ABC with concrete adapters (`PDFSourceAdapter`, `URLSourceAdapter`, `CodeSourceAdapter`, `MarkdownCopyAdapter`) wired to shared pipeline stages
 - `src/routes/` — REST API routes (source management, wiki browsing)
-- `src/lint_checks/` — Wiki quality checks
+- `src/lint_checks/` — Wiki quality checks (broken links, duplicates, stale claims)
+- `src/security/` — Path validation utilities
+- `src/factories.py` — Default pipeline stage factory
+- `src/catalog.py` — Source catalog
 - `src/prompt.py` — Unified `build_rag_prompt()` for RAG prompt construction
 
 ### Ingestion Pipeline
@@ -158,8 +160,7 @@ This will:
 | Method   | Endpoint                 | Description                    |
 |----------|--------------------------|--------------------------------|
 | `GET`    | `/health`                | Service health check           |
-| `POST`   | `/chat`                  | Chat with wiki (SSE streaming) |
-| `POST`   | `/chat/async`            | Async chat (SSE streaming)     |
+| `POST`   | `/chat`                  | Chat with wiki (SSE streaming)     |
 | `GET`    | `/api/sources`           | List all sources               |
 | `POST`   | `/api/sources`           | Add a new source               |
 | `PUT`    | `/api/sources/{id}`      | Update a source                |
@@ -182,12 +183,14 @@ personal-wiki/
 ├── state/                # Registry and change-tracking state
 ├── static/               # Chat UI files
 ├── src/                  # Python source code
-│   ├── routes/           # REST API routes
-│   ├── services/         # LLMProvider, EmbeddingProvider, VectorStore abstractions
-│   ├── pipeline/         # Stage definitions (Convert, Extract, Write, Resolve, Index)
+│   ├── services/         # LLMProvider, EmbeddingProvider, VectorStore, pipeline stages
 │   ├── ingestion/        # SourceAdapter ABC + concrete adapters
-│   ├── lint_checks/      # Wiki quality checks
-│   ├── ingest.py         # Ingestion CLI (SourceSpec, Reporter, run_source)
+│   ├── routes/           # REST API routes (sources, wiki browsing)
+│   ├── lint_checks/      # Wiki quality checks (broken links, duplicates, stale claims)
+│   ├── security/         # Path validation utilities
+│   ├── factories.py      # Default pipeline stage factory
+│   ├── catalog.py        # Source catalog
+│   ├── ingest.py         # Ingestion CLI (SourceSpec, Reporter, run_source_async)
 │   ├── prompt.py         # Unified RAG prompt builder
 │   ├── chat.py           # ChatEngine with wiki retrieval
 │   ├── history.py        # SQLite-backed chat history

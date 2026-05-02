@@ -10,6 +10,7 @@
 | **Source Entry**  | A single record in the registry representing one source                    | Source record, entry               |
 | **Source Status** | Lifecycle state of a source: pending, processing, processed, or failed     | State, phase                       |
 | **Content Hash**  | SHA256 fingerprint of a source file used for change detection              | Checksum, digest, signature        |
+| **Source Spec**   | Configuration for a single source including type, path, tags, and pipeline mode | Spec, source config           |
 
 ## Wiki Content
 
@@ -43,6 +44,10 @@
 | **Source Document**    | The original document being processed (referenced in extracted items)                      | Parent document, origin         |
 | **Entity Extraction**  | LLM-powered identification of concrete entities from document text                         | NER, entity recognition         |
 | **Concept Extraction** | LLM-powered identification of abstract concepts from document text                         | Idea extraction, topic mining   |
+| **Pipeline Stage**     | A step in the ingestion pipeline (Extract, Write, Resolve, Index) injected into adapters   | Stage, processing step          |
+| **Source Adapter**     | Component that handles a specific source type through the pipeline                         | Ingestor, adapter               |
+| **Ingestion Result**   | Outcome of ingesting a source (success/failure, output path, entity/concept pages)         | Result                          |
+| **Reporter**           | Status output interface for ingestion (prints skip/ingest/success/failure)                 | Logger, status output           |
 
 ## Semantic Search
 
@@ -56,28 +61,35 @@
 
 ## Wiki Quality
 
-| Term              | Definition                                                                                                  | Aliases to avoid                |
-|-------------------|-------------------------------------------------------------------------------------------------------------|---------------------------------|
-| **Wiki Linter**   | Component that detects wiki health issues (orphans, broken links, duplicates, contradictions, stale claims) | Health checker, validator       |
-| **Duplicate**     | Two or more wiki pages with near-identical content (detected by Jaccard similarity)                         | Near-duplicate, similar content |
-| **Stale Claim**   | A claim in a wiki page whose content has not been updated within a configurable age threshold               | Outdated claim, old content     |
-| **Contradiction** | Conflicting statements between two wiki pages on the same topic                                             | Conflict, inconsistency         |
+| Term              | Definition                                                                                         | Aliases to avoid                |
+|-------------------|----------------------------------------------------------------------------------------------------|---------------------------------|
+| **Wiki Linter**   | Component that detects wiki health issues (orphans, broken links, duplicates, stale claims)        | Health checker, validator       |
+| **Page Catalog**  | Centralized wiki page discovery module that finds all pages and existing slugs                     | Catalog, page finder            |
+| **Duplicate**     | Two or more wiki pages with near-identical content (detected by Jaccard similarity)                | Near-duplicate, similar content |
+| **Stale Claim**   | A claim in a wiki page whose content has not been updated within a configurable age threshold      | Outdated claim, old content     |
 
 ## Query & Response
 
-| Term               | Definition                                                                                     | Aliases to avoid                   |
-|--------------------|------------------------------------------------------------------------------------------------|------------------------------------|
+| Term               | Definition                                                                                    | Aliases to avoid                   |
+|--------------------|-----------------------------------------------------------------------------------------------|------------------------------------|
 | **Chat Engine**    | Component that handles user queries with RAG over the wiki, including semantic search fallback | Query handler, assistant           |
-| **Chat Service**   | Wrapper that adds session-based history persistence on top of the chat engine                  | Chat handler, conversation service |
-| **Chat History**   | SQLite-backed persistence of question-answer pairs grouped by session                          | Conversation log, message log      |
-| **Session**        | A named sequence of chat exchanges representing one user interaction                           | Conversation, thread               |
-| **Context Pages**  | Wiki pages retrieved as relevant context for answering a query                                 | Results, retrieved documents       |
-| **Keyword Search** | Fallback search that matches query text against wiki files directly                            | Local search, file search          |
+| **Chat History**   | SQLite-backed persistence of question-answer pairs grouped by session                         | Conversation log, message log      |
+| **Session**        | A named sequence of chat exchanges representing one user interaction                          | Conversation, thread               |
+| **Context Pages**  | Wiki pages retrieved as relevant context for answering a query                                | Results, retrieved documents       |
+| **Keyword Search** | Fallback search that matches query text against wiki files directly                           | Local search, file search          |
+
+## Utilities
+
+| Term       | Definition                                                                               | Aliases to avoid |
+|------------|------------------------------------------------------------------------------------------|------------------|
+| **Slugify**| Converts page titles to URL-safe filenames (lowercase, hyphens, alphanumeric only)       | Slug conversion  |
 
 ## Relationships
 
 - A **Source** is tracked by a **Source Entry** in the **Registry** with a **Source Status**
-- A **Source Entry** produces one or more **Wiki Pages** via **Ingestion**
+- A **Source Spec** determines which **Source Adapter** handles the source
+- A **Source Adapter** runs through pipeline stages: Extract → Write → Resolve → Index
+- Each stage reports status via a **Reporter** and returns an **Ingestion Result**
 - A **Wiki Page** lives in a **Wiki Category** and has a **Slug** derived from its title
 - A **Wiki Page** may contain zero or more **Wikilinks** to other pages
 - A **Placeholder** is created when a **Wikilink** has no target page
@@ -86,40 +98,41 @@
 - The **Link Resolver** finds **Broken Links** and missing targets, creating **Placeholders**
 - A **Wiki Page** is split into one or more **Chunks** by the **Indexer** for embedding
 - The **Chat Engine** retrieves **Context Pages** from the **Indexer** to answer queries
-- The **Chat Service** persists question-answer pairs in **Chat History** by **Session**
+- **Chat History** persists question-answer pairs in **Session**s
 - The **Registry** tracks each **Source** by its **Content Hash** to detect changes
 - A **Source** with **Full Pipeline** enabled undergoes **Entity Extraction** and **Concept Extraction**
+- The **Page Catalog** discovers all **Wiki Pages** for the **Wiki Linter** and **Link Resolver**
 
 ## Example dialogue
 
 > **Dev:** "When I add a new **Source** to `sources.yaml`, what happens during **Ingestion**?"
 >
 > **Domain expert:** "The **Ingestion** pipeline computes the **Content Hash** and checks the **Registry**. If
-> unchanged, it skips. If new or changed, it converts to markdown via **Docling**, then either runs the **Full Pipeline
-** (entity and concept extraction, wiki page creation) or does a **Simple Index** (copy and embed only), depending on
-> the source config."
+> unchanged, it skips. If new or changed, a **Source Spec** is created and routed to the right **Source Adapter**, which
+> runs through the pipeline stages. Each stage reports status via a **Reporter**, and the final outcome is an **Ingestion Result**."
+
+> **Dev:** "And what does the adapter actually do?"
+>
+> **Domain expert:** "Depending on the **Source Type**, it either uses **Docling** to convert PDFs, fetches URLs,
+> copies markdown files, or scans code repos. If **Full Pipeline** is enabled, it extracts **Entity** and **Concept**
+> pages via LLM. Then the **Indexer** splits each **Wiki Page** into **Chunks** and embeds them into Qdrant."
 
 > **Dev:** "So if I link to `[[Machine Learning]]` but no such page exists yet?"
 >
-> **Domain expert:** "The **Link Resolver** detects the missing page and creates a **Placeholder** with a slug of
-`machine-learning.md` in the entities category. The **Wiki Linter** will flag it as an **Orphan** if no other page links
-> to it, or as a **Broken Link** if the target was deleted."
+> **Domain expert:** "The **Link Resolver** detects the missing page and creates a **Placeholder** with a **Slug**
+> of `machine-learning.md` in the entities category. The **Wiki Linter** will flag it as an **Orphan** if no other
+> page links to it, or as a **Broken Link** if the target was deleted."
 
-> **Dev:** "And when the **Curator** asks a question via chat?"
+> **Dev:** "And when a user asks a question via chat?"
 >
 > **Domain expert:** "The **Chat Engine** uses the **Indexer** to find **Context Pages** via semantic search — falling
-> back to **Keyword Search** if Qdrant is unavailable. The **Chat Service** wraps that and persists the exchange in **Chat
-History** under the current **Session**."
-
-> **Dev:** "What about wiki page content that gets too long?"
->
-> **Domain expert:** "The **Indexer** splits each **Wiki Page** into **Chunks** of about 3000 characters, respecting
-> heading boundaries. Each chunk gets its own embedding, so semantic search can retrieve the most relevant section."
+> back to **Keyword Search** if Qdrant is unavailable. It builds a RAG prompt and streams the response. The exchange
+> gets persisted in **Chat History** under the current **Session**."
 
 ## Flagged ambiguities
 
-- **"Document"** was used to mean both a **Source** (input file) and a **Wiki Page** (output). Recommendation: use *
-  *Source** for inputs, **Wiki Page** for outputs, **Source Document** only when referencing the origin of an extracted
+- **"Document"** was used to mean both a **Source** (input file) and a **Wiki Page** (output). Recommendation: use
+  **Source** for inputs, **Wiki Page** for outputs, **Source Document** only when referencing the origin of an extracted
   item in frontmatter.
 
 - **"Index"** was used for both the **Registry** (source tracking) and the **Indexer** (Qdrant vector search). These are
@@ -131,6 +144,10 @@ History** under the current **Session**."
 - **"Category"** was used for both a **Wiki Category** (directory like `entities/`) and the `category` field in
   frontmatter. These are the same concept — the frontmatter value determines which directory the page lives in.
 
-- **"Full Pipeline"** vs **"Simple Index"** — both apply to markdown sources. **Full Pipeline** runs LLM extraction; *
-  *Simple Index** just copies and embeds. Don't use "pipeline" generically — it refers specifically to the LLM
+- **"Full Pipeline"** vs **"Simple Index"** — both apply to markdown sources. **Full Pipeline** runs LLM extraction;
+  **Simple Index** just copies and embeds. Don't use "pipeline" generically — it refers specifically to the LLM
   extraction stage.
+
+- **"Catalog"** was used for both the **Registry** (source tracking) and the **Page Catalog** (wiki page discovery).
+  The **Registry** lives in `state/` and tracks sources; the **Page Catalog** is in `catalog.py` and finds all wiki
+  pages for linting and link resolution.
