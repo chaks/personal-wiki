@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Personal Wiki — System Architecture</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Inter', sans-serif; background: #0f1117; color: #e1e4ea; min-height: 100vh; padding: 2rem; }
+
+  .layer { opacity: 0; animation: fadeSlideIn 0.6s ease forwards; }
+  .layer:nth-child(1) { animation-delay: 0.1s; }
+  .layer:nth-child(2) { animation-delay: 0.25s; }
+  .layer:nth-child(3) { animation-delay: 0.4s; }
+  .layer:nth-child(4) { animation-delay: 0.55s; }
+  .layer:nth-child(5) { animation-delay: 0.7s; }
+  .layer:nth-child(6) { animation-delay: 0.85s; }
+  .layer:nth-child(7) { animation-delay: 1.0s; }
+  .layer:nth-child(8) { animation-delay: 1.15s; }
+  .layer:nth-child(9) { animation-delay: 1.3s; }
+
+  @keyframes fadeSlideIn {
+    from { opacity: 0; transform: translateY(14px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .comp {
+    position: relative;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    cursor: default;
+  }
+  .comp:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 30px rgba(0,0,0,0.35);
+  }
+
+  /* connection ports — dots on top/bottom of cards */
+  .port {
+    position: absolute;
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    z-index: 10;
+  }
+  .port-top {
+    top: -6px; left: 50%; transform: translateX(-50%);
+    border: 2px solid var(--pc);
+    background: #0f1117;
+  }
+  .port-bottom {
+    bottom: -6px; left: 50%; transform: translateX(-50%);
+    background: var(--pc);
+    box-shadow: 0 0 8px var(--pc);
+  }
+  .port-left {
+    top: 50%; left: -6px; transform: translateY(-50%);
+    border: 2px solid var(--pc);
+    background: #0f1117;
+  }
+  .port-right {
+    top: 50%; right: -6px; left: auto; transform: translateY(-50%);
+    background: var(--pc);
+    box-shadow: 0 0 8px var(--pc);
+  }
+
+  .comp .tip {
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+    transform: translateY(4px);
+  }
+  .comp:hover .tip {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .pulse-ring { animation: pulse 2.5s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{opacity:.3} 50%{opacity:1} }
+
+  .legend-item { transition: opacity 0.2s; }
+  .legend-item:hover { opacity: 0.65; }
+</style>
+</head>
+<body>
+
+<div class="max-w-[1280px] mx-auto">
+
+  <!-- Title -->
+  <div class="mb-8 text-center">
+    <h1 class="text-3xl font-bold tracking-tight text-white">Personal Wiki — Architecture</h1>
+    <p class="text-sm text-gray-500 mt-2">Local AI knowledge base · Ollama + Qdrant + FastAPI</p>
+  </div>
+
+  <!-- Legend -->
+  <div class="flex flex-wrap justify-center gap-5 mb-8 text-xs">
+    <span class="legend-item flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-blue-500 inline-block"></span>Client</span>
+    <span class="legend-item flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-purple-500 inline-block"></span>API / Backend</span>
+    <span class="legend-item flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-emerald-500 inline-block"></span>Database / Storage</span>
+    <span class="legend-item flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-orange-500 inline-block"></span>External Services</span>
+    <span class="legend-item flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-gray-500 inline-block"></span>Infrastructure</span>
+  </div>
+
+  <!-- ======================== DIAGRAM WRAPPER ======================== -->
+  <div class="relative" id="diagram">
+
+    <!-- SVG overlay — bezier curves, covers full diagram + overflow for side routes -->
+    <svg id="svg" class="absolute pointer-events-none" style="z-index:1; top:-60px; left:-60px; right:-60px; bottom:-60px; width:calc(100% + 120px); height:calc(100% + 120px);" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="ah-blue" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto">
+          <polygon points="0 0, 7 2.5, 0 5" fill="#3b82f6" opacity="0.6"/>
+        </marker>
+        <marker id="ah-purple" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto">
+          <polygon points="0 0, 7 2.5, 0 5" fill="#a855f7" opacity="0.6"/>
+        </marker>
+        <marker id="ah-orange" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto">
+          <polygon points="0 0, 7 2.5, 0 5" fill="#f97316" opacity="0.6"/>
+        </marker>
+        <marker id="ah-green" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto">
+          <polygon points="0 0, 7 2.5, 0 5" fill="#10b981" opacity="0.6"/>
+        </marker>
+        <marker id="ah-gray" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto">
+          <polygon points="0 0, 7 2.5, 0 5" fill="#6b7280" opacity="0.6"/>
+        </marker>
+      </defs>
+      <!-- paths injected by JS -->
+    </svg>
+
+    <!-- LAYER ROWS (z-index 2, above SVG) -->
+    <div class="relative z-10">
+
+      <!-- ===== LAYER 0: CLIENT ===== -->
+      <div class="layer">
+        <div class="text-xs font-semibold uppercase tracking-widest text-gray-600 mb-3">Client Layer</div>
+        <div class="flex justify-center gap-24">
+          <div id="browser" class="comp bg-blue-500/10 border border-blue-500/30 rounded-xl px-6 py-4 text-center min-w-[180px]" style="--pc:#3b82f6;">
+            <div class="port port-top"></div>
+            <div class="port port-bottom"></div>
+            <div class="text-blue-400 text-sm font-semibold">Web Browser</div>
+            <div class="text-gray-500 text-xs mt-1">Chat · Manage · Browse</div>
+            <div class="tip absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-gray-800 text-gray-200 text-xs rounded-lg px-3 py-2 shadow-xl whitespace-nowrap z-50">
+              localhost:8000 · /manage · /browse
+              <div class="absolute top-full left-1/2 -translate-x-1/2 border-[5px] border-transparent border-t-gray-800"></div>
+            </div>
+          </div>
+          <div id="cli" class="comp bg-blue-500/10 border border-blue-500/30 rounded-xl px-6 py-4 text-center min-w-[180px]" style="--pc:#3b82f6;">
+            <div class="port port-top"></div>
+            <div class="port port-bottom"></div>
+            <div class="text-blue-400 text-sm font-semibold">CLI</div>
+            <div class="text-gray-500 text-xs mt-1">make ingest · lint-wiki</div>
+            <div class="tip absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-gray-800 text-gray-200 text-xs rounded-lg px-3 py-2 shadow-xl whitespace-nowrap z-50">
+              Ingestion & wiki lint commands
+              <div class="absolute top-full left-1/2 -translate-x-1/2 border-[5px] border-transparent border-t-gray-800"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- gap -->
+      <div class="h-[64px]"></div>
+
+      <!-- ===== LAYER 1: API ===== -->
+      <div class="layer">
+        <div class="text-xs font-semibold uppercase tracking-widest text-gray-600 mb-3">API Layer</div>
+        <div class="flex justify-center">
+          <div id="fastapi" class="comp bg-purple-500/10 border border-purple-500/30 rounded-xl px-10 py-5 text-center min-w-[360px]" style="--pc:#a855f7;">
+            <div class="port port-top"></div>
+            <div class="port port-bottom"></div>
+            <div class="text-purple-400 text-sm font-semibold">FastAPI Server</div>
+            <div class="text-gray-500 text-xs mt-1">create_app() · Middleware · SSE · Security</div>
+            <div class="tip absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-gray-800 text-gray-200 text-xs rounded-lg px-3 py-2 shadow-xl whitespace-nowrap z-50">
+              Auth · Rate Limit · Path Validation · Prompt Injection Guard
+              <div class="absolute top-full left-1/2 -translate-x-1/2 border-[5px] border-transparent border-t-gray-800"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- gap -->
+      <div class="h-[64px]"></div>
+
+      <!-- ===== LAYER 2: APP SERVICES ===== -->
+      <div class="layer">
+        <div class="text-xs font-semibold uppercase tracking-widest text-gray-600 mb-3">Application Services</div>
+        <div class="flex justify-center gap-12">
+          <div id="chatengine" class="comp bg-purple-500/10 border border-purple-500/30 rounded-xl px-5 py-4 text-center min-w-[160px]" style="--pc:#a855f7;">
+            <div class="port port-top"></div>
+            <div class="port port-bottom"></div>
+            <div class="text-purple-400 text-sm font-semibold">ChatEngine</div>
+            <div class="text-gray-500 text-xs mt-1">RAG · Retrieval</div>
+            <div class="tip absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-gray-800 text-gray-200 text-xs rounded-lg px-3 py-2 shadow-xl whitespace-nowrap z-50">
+              build_rag_prompt() · wiki retrieval · SSE
+              <div class="absolute top-full left-1/2 -translate-x-1/2 border-[5px] border-transparent border-t-gray-800"></div>
+            </div>
+          </div>
+          <div id="sourceroutes" class="comp bg-purple-500/10 border border-purple-500/30 rounded-xl px-5 py-4 text-center min-w-[160px]" style="--pc:#a855f7;">
+            <div class="port port-top"></div>
+            <div class="port port-bottom"></div>
+            <div class="text-purple-400 text-sm font-semibold">Source Routes</div>
+            <div class="text-gray-500 text-xs mt-1">CRUD · Catalog</div>
+            <div class="tip absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-gray-800 text-gray-200 text-xs rounded-lg px-3 py-2 shadow-xl whitespace-nowrap z-50">
+              GET/POST/PUT/DELETE /api/sources
+              <div class="absolute top-full left-1/2 -translate-x-1/2 border-[5px] border-transparent border-t-gray-800"></div>
+            </div>
+          </div>
+          <div id="wikiroutes" class="comp bg-purple-500/10 border border-purple-500/30 rounded-xl px-5 py-4 text-center min-w-[160px]" style="--pc:#a855f7;">
+            <div class="port port-top"></div>
+            <div class="port port-bottom"></div>
+            <div class="text-purple-400 text-sm font-semibold">Wiki Routes</div>
+            <div class="text-gray-500 text-xs mt-1">Pages · Browse</div>
+            <div class="tip absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-gray-800 text-gray-200 text-xs rounded-lg px-3 py-2 shadow-xl whitespace-nowrap z-50">
+              GET /api/wiki/pages · markdown render
+              <div class="absolute top-full left-1/2 -translate-x-1/2 border-[5px] border-transparent border-t-gray-800"></div>
+            </div>
+          </div>
+          <div id="pipeline" class="comp bg-purple-500/10 border border-purple-500/30 rounded-xl px-5 py-4 text-center min-w-[160px]" style="--pc:#6b7280;">
+            <div class="port port-top"></div>
+            <div class="port port-bottom"></div>
+            <div class="port port-right"></div>
+            <div class="text-purple-400 text-sm font-semibold">Ingestion Pipeline</div>
+            <div class="text-gray-500 text-xs mt-1">Extract → Write → Index</div>
+            <div class="tip absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-gray-800 text-gray-200 text-xs rounded-lg px-3 py-2 shadow-xl whitespace-nowrap z-50">
+              PDF · URL · Code · Markdown adapters
+              <div class="absolute top-full left-1/2 -translate-x-1/2 border-[5px] border-transparent border-t-gray-800"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- gap -->
+      <div class="h-[64px]"></div>
+
+      <!-- ===== LAYER 3: SERVICE PROVIDERS ===== -->
+      <div class="layer">
+        <div class="text-xs font-semibold uppercase tracking-widest text-gray-600 mb-3">Service Providers</div>
+        <div class="flex justify-center gap-10">
+          <div id="llm" class="comp bg-orange-500/10 border border-orange-500/30 rounded-xl px-5 py-4 text-center min-w-[155px]" style="--pc:#f97316;">
+            <div class="port port-top"></div>
+            <div class="port port-bottom"></div>
+            <div class="text-orange-400 text-sm font-semibold">LLM Provider</div>
+            <div class="text-gray-500 text-xs mt-1">gemma4:e2b · async</div>
+            <div class="tip absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-gray-800 text-gray-200 text-xs rounded-lg px-3 py-2 shadow-xl whitespace-nowrap z-50">
+              Entity extraction · Chat · Wiki gen
+              <div class="absolute top-full left-1/2 -translate-x-1/2 border-[5px] border-transparent border-t-gray-800"></div>
+            </div>
+          </div>
+          <div id="vectorstore" class="comp bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-5 py-4 text-center min-w-[155px]" style="--pc:#10b981;">
+            <div class="port port-top"></div>
+            <div class="port port-bottom"></div>
+            <div class="text-emerald-400 text-sm font-semibold">VectorStore</div>
+            <div class="text-gray-500 text-xs mt-1">Semantic search</div>
+            <div class="tip absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-gray-800 text-gray-200 text-xs rounded-lg px-3 py-2 shadow-xl whitespace-nowrap z-50">
+              Qdrant client · nomic-embed · dedup
+              <div class="absolute top-full left-1/2 -translate-x-1/2 border-[5px] border-transparent border-t-gray-800"></div>
+            </div>
+          </div>
+          <div id="registry" class="comp bg-purple-500/10 border border-purple-500/30 rounded-xl px-5 py-4 text-center min-w-[155px]" style="--pc:#a855f7;">
+            <div class="port port-top"></div>
+            <div class="port port-bottom"></div>
+            <div class="text-purple-400 text-sm font-semibold">Source Registry</div>
+            <div class="text-gray-500 text-xs mt-1">SHA256 · Change detect</div>
+            <div class="tip absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-gray-800 text-gray-200 text-xs rounded-lg px-3 py-2 shadow-xl whitespace-nowrap z-50">
+              state/registry.yaml · skip unchanged
+              <div class="absolute top-full left-1/2 -translate-x-1/2 border-[5px] border-transparent border-t-gray-800"></div>
+            </div>
+          </div>
+          <div id="wikifs" class="comp bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-5 py-4 text-center min-w-[155px]" style="--pc:#10b981;">
+            <div class="port port-top"></div>
+            <div class="port port-bottom"></div>
+            <div class="text-emerald-400 text-sm font-semibold">Wiki Filesystem</div>
+            <div class="text-gray-500 text-xs mt-1">entities / concepts</div>
+            <div class="tip absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-gray-800 text-gray-200 text-xs rounded-lg px-3 py-2 shadow-xl whitespace-nowrap z-50">
+              LLM-maintained markdown wiki
+              <div class="absolute top-full left-1/2 -translate-x-1/2 border-[5px] border-transparent border-t-gray-800"></div>
+            </div>
+          </div>
+          <div id="indexer" class="comp bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-5 py-4 text-center min-w-[155px]" style="--pc:#10b981;">
+            <div class="port port-top"></div>
+            <div class="port port-bottom"></div>
+            <div class="text-emerald-400 text-sm font-semibold">Indexer</div>
+            <div class="text-gray-500 text-xs mt-1">Async Qdrant index</div>
+            <div class="tip absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-gray-800 text-gray-200 text-xs rounded-lg px-3 py-2 shadow-xl whitespace-nowrap z-50">
+              Chunk-level dedup · embeddings
+              <div class="absolute top-full left-1/2 -translate-x-1/2 border-[5px] border-transparent border-t-gray-800"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- gap -->
+      <div class="h-[64px]"></div>
+
+      <!-- ===== LAYER 4: EXTERNAL ===== -->
+      <div class="layer">
+        <div class="text-xs font-semibold uppercase tracking-widest text-gray-600 mb-3">External Services & Storage</div>
+        <div class="flex justify-center gap-12">
+          <div id="ollama" class="comp bg-orange-500/10 border border-orange-500/30 rounded-xl px-7 py-5 text-center min-w-[170px]" style="--pc:#f97316;">
+            <div class="port port-top"></div>
+            <div class="pulse-ring absolute inset-0 rounded-xl border-2 border-orange-500/20"></div>
+            <div class="text-orange-400 text-sm font-semibold relative z-10">Ollama</div>
+            <div class="text-gray-500 text-xs mt-1 relative z-10">gemma4:e2b · nomic-embed</div>
+            <div class="tip absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-gray-800 text-gray-200 text-xs rounded-lg px-3 py-2 shadow-xl whitespace-nowrap z-50">
+              Local LLM runtime · embeddings + generation
+              <div class="absolute top-full left-1/2 -translate-x-1/2 border-[5px] border-transparent border-t-gray-800"></div>
+            </div>
+          </div>
+          <div id="qdrant" class="comp bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-7 py-5 text-center min-w-[170px]" style="--pc:#10b981;">
+            <div class="port port-top"></div>
+            <div class="pulse-ring absolute inset-0 rounded-xl border-2 border-emerald-500/20"></div>
+            <div class="text-emerald-400 text-sm font-semibold relative z-10">Qdrant</div>
+            <div class="text-gray-500 text-xs mt-1 relative z-10">Vector DB · Docker</div>
+            <div class="tip absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-gray-800 text-gray-200 text-xs rounded-lg px-3 py-2 shadow-xl whitespace-nowrap z-50">
+              Semantic index · port 6333 · snapshots
+              <div class="absolute top-full left-1/2 -translate-x-1/2 border-[5px] border-transparent border-t-gray-800"></div>
+            </div>
+          </div>
+          <div id="disk" class="comp bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-7 py-5 text-center min-w-[170px]" style="--pc:#10b981;">
+            <div class="port port-top"></div>
+            <div class="text-emerald-400 text-sm font-semibold">Disk (wiki/)</div>
+            <div class="text-gray-500 text-xs mt-1">Markdown files</div>
+            <div class="tip absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-gray-800 text-gray-200 text-xs rounded-lg px-3 py-2 shadow-xl whitespace-nowrap z-50">
+              wiki/entities/ · wiki/concepts/ · wiki/generated/
+              <div class="absolute top-full left-1/2 -translate-x-1/2 border-[5px] border-transparent border-t-gray-800"></div>
+            </div>
+          </div>
+          <div id="sources" class="comp bg-gray-500/10 border border-gray-500/30 rounded-xl px-7 py-5 text-center min-w-[170px]" style="--pc:#6b7280;">
+            <div class="port port-top"></div>
+            <div class="port port-right"></div>
+            <div class="text-gray-400 text-sm font-semibold">Source Files</div>
+            <div class="text-gray-500 text-xs mt-1">PDFs · URLs · Code</div>
+            <div class="tip absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-gray-800 text-gray-200 text-xs rounded-lg px-3 py-2 shadow-xl whitespace-nowrap z-50">
+              sources/ · immutable inputs
+              <div class="absolute top-full left-1/2 -translate-x-1/2 border-[5px] border-transparent border-t-gray-800"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /z-10 -->
+  </div><!-- /relative diagram -->
+
+  <!-- ======================== DATA FLOW FOOTER ======================== -->
+  <div class="layer mt-10 border-t border-gray-800/60 pt-6">
+    <div class="text-xs font-semibold uppercase tracking-widest text-gray-600 mb-4">Data Flow Summary</div>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+      <div class="bg-gray-800/40 rounded-lg p-4 border border-gray-700/30">
+        <div class="text-blue-400 font-medium mb-1">Chat Flow</div>
+        <div class="text-gray-400 text-xs leading-relaxed">Browser → FastAPI → ChatEngine → VectorStore (retrieve) → LLM (generate) → SSE stream back</div>
+      </div>
+      <div class="bg-gray-800/40 rounded-lg p-4 border border-gray-700/30">
+        <div class="text-purple-400 font-medium mb-1">Ingestion Flow</div>
+        <div class="text-gray-400 text-xs leading-relaxed">Sources → Docling/Adapters → LLM Extract → Wiki Pages → Indexer → Qdrant · SHA256 registry</div>
+      </div>
+      <div class="bg-gray-800/40 rounded-lg p-4 border border-gray-700/30">
+        <div class="text-emerald-400 font-medium mb-1">Wiki Structure</div>
+        <div class="text-gray-400 text-xs leading-relaxed">
+          <code class="text-orange-300">wiki/entities/</code> — people, orgs, tech<br>
+          <code class="text-orange-300">wiki/concepts/</code> — theories, patterns<br>
+          <code class="text-orange-300">wiki/generated/</code> — raw summaries
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /max-w -->
+
+<script>
+// ---- connection map: {fromId, toId, color, dashed?, label?} ----
+const markerMap = { '#3b82f6': 'ah-blue', '#a855f7': 'ah-purple', '#f97316': 'ah-orange', '#10b981': 'ah-green', '#6b7280': 'ah-gray', '#9ca3af': 'ah-gray' };
+
+const connections = [
+  // Client → API
+  { from: 'browser',     to: 'fastapi',     color: '#3b82f6' },
+  { from: 'cli',         to: 'fastapi',     color: '#3b82f6' },
+  // API → App Services
+  { from: 'fastapi',     to: 'chatengine',  color: '#a855f7' },
+  { from: 'fastapi',     to: 'sourceroutes',color: '#a855f7' },
+  { from: 'fastapi',     to: 'wikiroutes',  color: '#a855f7' },
+  { from: 'fastapi',     to: 'pipeline',    color: '#a855f7' },
+  // ChatEngine → LLM + VectorStore
+  { from: 'chatengine',  to: 'llm',         color: '#a855f7' },
+  { from: 'chatengine',  to: 'vectorstore', color: '#a855f7' },
+  // Ingestion Pipeline → LLM + WikiFS + Indexer + Registry
+  { from: 'pipeline',    to: 'llm',         color: '#a855f7' },
+  { from: 'pipeline',    to: 'wikifs',      color: '#a855f7' },
+  { from: 'pipeline',    to: 'indexer',     color: '#a855f7' },
+  { from: 'pipeline',    to: 'registry',    color: '#6b7280', dashed: true },
+  // Providers → External
+  { from: 'llm',         to: 'ollama',      color: '#f97316' },
+  { from: 'vectorstore', to: 'qdrant',      color: '#10b981' },
+  { from: 'wikifs',      to: 'disk',        color: '#10b981' },
+  { from: 'indexer',     to: 'qdrant',      color: '#10b981', dashed: true },
+  // Source Files → Pipeline (dashed, routed along right edge)
+  { from: 'sources',     to: 'pipeline',    color: '#9ca3af', dashed: true, route: 'side-right' },
+];
+
+function portPos(id, side) {
+  const el = document.getElementById(id);
+  if (!el) return null;
+  const rect = el.getBoundingClientRect();
+  const svgRect = document.getElementById('svg').getBoundingClientRect();
+  if (side === 'top') return { x: rect.left + rect.width / 2 - svgRect.left, y: rect.top - svgRect.top };
+  if (side === 'bottom') return { x: rect.left + rect.width / 2 - svgRect.left, y: rect.bottom - svgRect.top };
+  if (side === 'right') return { x: rect.right - svgRect.left, y: rect.top + rect.height / 2 - svgRect.top };
+  if (side === 'left') return { x: rect.left - svgRect.left, y: rect.top + rect.height / 2 - svgRect.top };
+}
+
+function buildPath(from, to, route) {
+  // Special: side-right route (upward sweep along right edge)
+  if (route === 'side-right') {
+    const src = portPos(from, 'right');
+    const tgt = portPos(to, 'right');
+    if (!src || !tgt) return null;
+    const offset = 120; // how far right to bulge (clears Indexer)
+    const cx = Math.max(src.x, tgt.x) + offset;
+    return `M ${src.x} ${src.y} C ${cx} ${src.y}, ${cx} ${tgt.y}, ${tgt.x} ${tgt.y}`;
+  }
+
+  const p1 = portPos(from, 'bottom');
+  const p2 = portPos(to, 'top');
+  if (!p1 || !p2) return null;
+
+  // Determine direction: if target is above source, use top port of source and bottom of target
+  let sx = p1.x, sy = p1.y;
+  let tx = p2.x, ty = p2.y;
+
+  if (ty < sy) {
+    // target is above source — flip ports
+    const top = portPos(from, 'top');
+    const bot = portPos(to, 'bottom');
+    if (top && bot) {
+      sx = top.x; sy = top.y;
+      tx = bot.x; ty = bot.y;
+    }
+  }
+
+  const dy = Math.abs(ty - sy);
+  const cp = Math.max(dy * 0.45, 20);
+  return `M ${sx} ${sy} C ${sx} ${sy + cp}, ${tx} ${ty - cp}, ${tx} ${ty}`;
+}
+
+function renderPaths() {
+  const svg = document.getElementById('svg');
+  // clear old
+  svg.querySelectorAll('.conn-path, .conn-dot').forEach(n => n.remove());
+
+  connections.forEach((c, i) => {
+    const d = buildPath(c.from, c.to, c.route);
+    if (!d) return;
+
+    // path — set ID BEFORE appending so mpath can reference it
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.id = `conn-${i}`;
+    path.setAttribute('d', d);
+    path.setAttribute('stroke', c.color);
+    path.setAttribute('stroke-width', c.route === 'side-right' ? '2.5' : '2');
+    path.setAttribute('fill', 'none');
+    // side routes get higher opacity since they're on the periphery
+    path.setAttribute('opacity', c.route === 'side-right' ? '0.55' : '0.45');
+    path.setAttribute('marker-end', `url(#${markerMap[c.color] || 'ah-gray'})`);
+    if (c.dashed) path.setAttribute('stroke-dasharray', '5 4');
+    path.classList.add('conn-path');
+    svg.appendChild(path);
+
+    // animated dot — mpath references the path by id
+    const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    dot.setAttribute('r', '3');
+    dot.setAttribute('fill', c.color);
+    dot.classList.add('conn-dot');
+    dot.innerHTML = `
+      <animateMotion dur="2.5s" repeatCount="indefinite" begin="${(i * 0.2).toFixed(2)}s">
+        <mpath href="#conn-${i}"/>
+      </animateMotion>
+      <animate attributeName="opacity" values="0;0.85;0.85;0" dur="2.5s" repeatCount="indefinite" begin="${(i * 0.2).toFixed(2)}s" keyTimes="0;0.15;0.85;1"/>
+    `;
+    svg.appendChild(dot);
+  });
+}
+
+// render after layout + CSS animations settle
+window.addEventListener('DOMContentLoaded', () => setTimeout(renderPaths, 100));
+window.addEventListener('resize', () => requestAnimationFrame(renderPaths));
+</script>
+
+</body>
+</html>
