@@ -22,12 +22,9 @@ A local AI-powered chat assistant that queries a persistent knowledge wiki built
 
 ## Architecture
 
-```
-sources/ → Docling → wiki/ → Qdrant → Chat UI
-              ↓          ↑
-          gemma4:e2b    Ollama (embeddings + generation)
-          extraction
-```
+![Architecture](https://raw.githubusercontent.com/chaks/personal-wiki/gh-pages/diagrams/architecture.png)
+
+[View interactive diagram with animations →](https://chaks.github.io/personal-wiki/diagrams/architecture.html)
 
 ### Wiki Structure
 
