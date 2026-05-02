@@ -1,10 +1,10 @@
+from __future__ import annotations
 """LLM-based entity and concept extraction using Ollama."""
 import json
 import logging
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
 import yaml
 
@@ -22,7 +22,7 @@ class Entity:
     name: str
     entity_type: str  # person, organization, product, technology, etc.
     description: str
-    source_doc: Optional[str] = None
+    source_doc: str | None = None
 
 
 @dataclass
@@ -31,7 +31,7 @@ class Concept:
     name: str
     definition: str
     related_entities: list[str] = field(default_factory=list)
-    source_doc: Optional[str] = None
+    source_doc: str | None = None
 
 
 class EntityExtractor:
@@ -86,8 +86,8 @@ Rules:
     def __init__(
         self,
         model: str = "gemma4:e2b",
-        schema_path: Optional[Path] = None,
-        llm_provider: Optional[LLMProvider] = None,
+        schema_path: Path | None = None,
+        llm_provider: LLMProvider | None = None,
     ):
         """Initialize the extractor.
 
@@ -150,7 +150,7 @@ Rules:
         second = document[mid_start:mid_start + _EXTRACT_CHUNK_SIZE // 2]
         return first + "\n...\n" + second
 
-    async def extract(self, document: str, source_doc: Optional[str] = None) -> list[Entity]:
+    async def extract(self, document: str, source_doc: str | None = None) -> list[Entity]:
         """Extract entities from a document using LLM (async).
 
         Args:
@@ -188,7 +188,7 @@ Rules:
             return []
 
     async def extract_concepts(
-        self, document: str, source_doc: Optional[str] = None
+        self, document: str, source_doc: str | None = None
     ) -> list[Concept]:
         """Extract concepts from a document using LLM (async).
 
@@ -226,93 +226,65 @@ Rules:
             logger.error(f"Concept extraction failed: {e}")
             return []
 
-    def _parse_entities(self, raw_text: str) -> list[Entity]:
-        """Parse entity lines from LLM response.
-
-        Supports formats:
-        - ENTITY: name|type|description (pipe-separated, no spaces around pipes)
-        - ENTITY: name | type | description (pipe-separated, with spaces)
+    def _parse_lines(
+        self,
+        raw_text: str,
+        prefix: str,
+        min_parts: int,
+        builder,
+    ) -> list:
+        """Parse pipe-delimited lines with a given prefix from LLM response.
 
         Args:
-            raw_text: Raw LLM response text
+            raw_text: Raw LLM response text.
+            prefix: Expected line prefix (e.g. "ENTITY" or "CONCEPT").
+            min_parts: Minimum number of pipe-delimited parts required.
+            builder: Callable receiving (*parts) returning a dataclass instance.
 
         Returns:
-            List of parsed Entity objects
+            List of built items, deduplicated by name (case-insensitive).
         """
-        entities = []
-        seen = set()
+        items: list = []
+        seen: set[str] = set()
 
-        for line in raw_text.split("\n"):
+        for line in raw_text.splitlines():
             line = line.strip()
-            if not line.startswith("ENTITY:"):
+            if not line.startswith(f"{prefix}:"):
                 continue
 
-            # Remove ENTITY: prefix and split by pipe
-            content = line.replace("ENTITY:", "").strip()
+            content = line.replace(f"{prefix}:", "").strip()
             parts = [p.strip() for p in content.split("|")]
 
-            if len(parts) >= 3:
-                name = parts[0]
-                # Deduplicate within a single response
-                if name.lower() in seen:
-                    continue
-                seen.add(name.lower())
-                entity = Entity(
-                    name=name,
-                    entity_type=parts[1],
-                    description=parts[2]
-                )
-                entities.append(entity)
-            else:
-                logger.debug(f"Skipping malformed entity line: {line}")
+            if len(parts) < min_parts:
+                logger.debug(f"Skipping malformed line: {line}")
+                continue
 
-        return entities
+            key = parts[0].lower()
+            if key in seen:
+                continue
+            seen.add(key)
+
+            items.append(builder(*parts))
+
+        return items
+
+    def _parse_entities(self, raw_text: str) -> list[Entity]:
+        """Parse entity lines from LLM response."""
+        return self._parse_lines(
+            raw_text,
+            "ENTITY",
+            3,
+            lambda name, etype, desc: Entity(name=name, entity_type=etype, description=desc),
+        )
 
     def _parse_concepts(self, raw_text: str) -> list[Concept]:
-        """Parse concept lines from LLM response.
+        """Parse concept lines from LLM response."""
+        def build(name: str, definition: str, *related: str) -> Concept:
+            rel = (
+                [e.strip() for e in related[0].split(",") if e.strip()]
+                if related and related[0]
+                else []
+            )
+            return Concept(name=name, definition=definition, related_entities=rel)
 
-        Supports formats:
-        - CONCEPT: name|definition|related_entities (pipe-separated)
-        - CONCEPT: name | definition | related_entities (pipe-separated, with spaces)
-
-        Args:
-            raw_text: Raw LLM response text
-
-        Returns:
-            List of parsed Concept objects
-        """
-        concepts = []
-        seen = set()
-
-        for line in raw_text.split("\n"):
-            line = line.strip()
-            if not line.startswith("CONCEPT:"):
-                continue
-
-            # Remove CONCEPT: prefix and split by pipe
-            content = line.replace("CONCEPT:", "").strip()
-            parts = [p.strip() for p in content.split("|")]
-
-            if len(parts) >= 2:
-                name = parts[0]
-                if name.lower() in seen:
-                    continue
-                seen.add(name.lower())
-                definition = parts[1]
-
-                related_entities = []
-                if len(parts) >= 3 and parts[2]:
-                    related_entities = [
-                        e.strip() for e in parts[2].split(",") if e.strip()
-                    ]
-
-                concept = Concept(
-                    name=name,
-                    definition=definition,
-                    related_entities=related_entities
-                )
-                concepts.append(concept)
-            else:
-                logger.debug(f"Skipping malformed concept line: {line}")
-
-        return concepts
+        return self._parse_lines(raw_text, "CONCEPT", 2, build)

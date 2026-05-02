@@ -1,14 +1,14 @@
+from __future__ import annotations
 # src/logging_config.py
 """Centralized logging configuration for Personal Wiki Chat."""
 import logging
 import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import Optional
 
 
 def setup_logging(
-    log_dir: Optional[Path] = None,
+    log_dir: Path | None = None,
     level: int = logging.INFO,
     file_level: int = logging.DEBUG,
 ) -> None:

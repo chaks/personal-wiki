@@ -1,7 +1,7 @@
+from __future__ import annotations
 """Centralized configuration management using Pydantic."""
 import logging
 from pathlib import Path
-from typing import Optional
 
 import yaml
 from pydantic import Field

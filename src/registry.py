@@ -1,12 +1,12 @@
+from __future__ import annotations
 # src/registry.py
 """Source registry with content-hash based change detection."""
 import hashlib
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -25,15 +25,15 @@ class SourceEntry:
         self,
         source_id: str,
         source_type: str,
-        path: Optional[str] = None,
-        url: Optional[str] = None,
+        path: str | None = None,
+        url: str | None = None,
         content_hash: str = "",
         status: SourceStatus = SourceStatus.PENDING,
         wiki_pages: Optional[list[str]] = None,
-        tags: Optional[list[str]] = None,
-        added_at: Optional[str] = None,
-        last_processed_at: Optional[str] = None,
-        error: Optional[str] = None,
+        tags: list[str] | None = None,
+        added_at: str | None = None,
+        last_processed_at: str | None = None,
+        error: str | None = None,
     ):
         self.source_id = source_id
         self.source_type = source_type
@@ -43,7 +43,7 @@ class SourceEntry:
         self.status = status
         self.wiki_pages = wiki_pages or []
         self.tags = tags or []
-        self.added_at = added_at or datetime.now().isoformat()
+        self.added_at = added_at or datetime.now(timezone.utc).isoformat()
         self.last_processed_at = last_processed_at
         self.error = error
 
@@ -105,7 +105,7 @@ class SourceRegistry:
     def _save(self) -> None:
         """Persist registry to disk."""
         self._data["sources"] = [e.to_dict() for e in self._sources.values()]
-        self._data["last_updated"] = datetime.now().isoformat()
+        self._data["last_updated"] = datetime.now(timezone.utc).isoformat()
         self.registry_path.parent.mkdir(parents=True, exist_ok=True)
         self.registry_path.write_text(json.dumps(self._data, indent=2))
         logger.debug(f"Saved registry with {len(self._sources)} sources")
@@ -123,8 +123,8 @@ class SourceRegistry:
         source_type: str,
         path: str,
         content_hash: str,
-        url: Optional[str] = None,
-        tags: Optional[list[str]] = None,
+        url: str | None = None,
+        tags: list[str] | None = None,
     ) -> SourceEntry:
         """Add a new source entry."""
         logger.info(f"Adding source: {source_id} (type={source_type})")
@@ -140,7 +140,7 @@ class SourceRegistry:
         self._save()
         return entry
 
-    def get_source(self, source_id: str) -> Optional[SourceEntry]:
+    def get_source(self, source_id: str) -> SourceEntry | None:
         """Retrieve a source entry by ID."""
         return self._sources.get(source_id)
 
@@ -165,7 +165,7 @@ class SourceRegistry:
         self,
         source_id: str,
         status: SourceStatus,
-        error: Optional[str] = None,
+        error: str | None = None,
     ) -> None:
         """Update source status."""
         entry = self._sources.get(source_id)
@@ -174,7 +174,7 @@ class SourceRegistry:
             entry.status = status
             entry.error = error
             if status in (SourceStatus.PROCESSED, SourceStatus.FAILED):
-                entry.last_processed_at = datetime.now().isoformat()
+                entry.last_processed_at = datetime.now(timezone.utc).isoformat()
             self._save()
             logger.info(f"Source {source_id} status: {old_status.value} -> {status.value}")
             if error:
@@ -193,9 +193,9 @@ class SourceRegistry:
         source_type: str,
         path: str,
         content_hash: str,
-        tags: Optional[list[str]] = None,
-        wiki_page_path: Optional[str] = None,
-        url: Optional[str] = None,
+        tags: list[str] | None = None,
+        wiki_page_path: str | None = None,
+        url: str | None = None,
     ) -> SourceEntry:
         """Record successful ingestion in one call.
 

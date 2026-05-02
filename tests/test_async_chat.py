@@ -1,7 +1,7 @@
+from __future__ import annotations
 """Tests for async chat engine methods."""
 import pytest
 from pathlib import Path
-from typing import Optional
 from unittest.mock import AsyncMock, Mock, patch
 from src.chat import ChatEngine
 from src.services.llm_provider import LLMProvider
@@ -35,11 +35,11 @@ class MockAsyncLLMProvider(LLMProvider):
     def health_check(self) -> bool:
         return True
 
-    async def generate_async(self, prompt: str, system: Optional[str] = None) -> str:
+    async def generate_async(self, prompt: str, system: str | None = None) -> str:
         self.generate_calls.append((prompt, system))
         return "async LLM response"
 
-    async def generate_stream_async(self, prompt: str, system: Optional[str] = None):
+    async def generate_stream_async(self, prompt: str, system: str | None = None):
         self.generate_stream_calls.append((prompt, system))
         yield "async chunk 1"
         yield "async chunk 2"

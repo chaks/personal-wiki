@@ -1,8 +1,8 @@
+from __future__ import annotations
 """Tests for refactored server with DI."""
 import pytest
 from unittest.mock import Mock, patch
 from pathlib import Path
-from typing import Optional
 import tempfile
 from fastapi.testclient import TestClient
 from src.server import create_app
@@ -17,10 +17,10 @@ class MockLLMProvider(LLMProvider):
     def health_check(self) -> bool:
         return True
 
-    async def generate_async(self, prompt: str, system: Optional[str] = None) -> str:
+    async def generate_async(self, prompt: str, system: str | None = None) -> str:
         return self.response
 
-    async def generate_stream_async(self, prompt: str, system: Optional[str] = None):
+    async def generate_stream_async(self, prompt: str, system: str | None = None):
         yield self.response
 
 

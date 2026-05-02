@@ -1,8 +1,9 @@
+from __future__ import annotations
 """LLM provider abstraction for external service decoupling."""
 import asyncio
 import logging
 from abc import ABC, abstractmethod
-from typing import AsyncIterator, Optional
+from collections.abc import AsyncIterator
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +21,7 @@ class LLMProvider(ABC):
         pass
 
     @abstractmethod
-    async def generate_async(self, prompt: str, system: Optional[str] = None) -> str:
+    async def generate_async(self, prompt: str, system: str | None = None) -> str:
         """Asynchronously generate a completion for the given prompt.
 
         Args:
@@ -33,7 +34,7 @@ class LLMProvider(ABC):
         pass
 
     @abstractmethod
-    async def generate_stream_async(self, prompt: str, system: Optional[str] = None) -> AsyncIterator[str]:
+    async def generate_stream_async(self, prompt: str, system: str | None = None) -> AsyncIterator[str]:
         """Asynchronously stream a completion for the given prompt.
 
         Args:
@@ -69,7 +70,7 @@ class OllamaProvider(LLMProvider):
             logger.error(f"Ollama health check failed: {e}")
             return False
 
-    async def generate_async(self, prompt: str, system: Optional[str] = None) -> str:
+    async def generate_async(self, prompt: str, system: str | None = None) -> str:
         """Generate completion asynchronously using ollama.chat."""
         import ollama
 
@@ -89,7 +90,7 @@ class OllamaProvider(LLMProvider):
         content = response.get("message", {}).get("content", "")
         return content or ""
 
-    async def generate_stream_async(self, prompt: str, system: Optional[str] = None) -> AsyncIterator[str]:
+    async def generate_stream_async(self, prompt: str, system: str | None = None) -> AsyncIterator[str]:
         """Stream completion asynchronously using ollama.chat."""
         import ollama
 
@@ -101,16 +102,14 @@ class OllamaProvider(LLMProvider):
             ]
         else:
             messages = [{"role": "user", "content": prompt}]
-        loop = asyncio.get_event_loop()
-        stream = await loop.run_in_executor(
-            None,
-            lambda: ollama.chat(
+        chunks = await asyncio.to_thread(
+            lambda: list(ollama.chat(
                 model=self.model,
                 messages=messages,
                 stream=True,
-            ),
+            ))
         )
-        for chunk in stream:
+        for chunk in chunks:
             response = chunk.get("message", {}).get("content", "")
             if response:
                 yield response

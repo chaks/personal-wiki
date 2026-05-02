@@ -1,10 +1,12 @@
+from __future__ import annotations
 # src/server.py
 """FastAPI backend for Personal Wiki Chat."""
 import json
 import logging
 import time
 from pathlib import Path
-from typing import AsyncGenerator, Optional, Set
+from collections.abc import AsyncGenerator
+from typing import Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -52,10 +54,10 @@ def create_app(
     state_dir: Path,
     static_dir: Path,
     qdrant_url: str = "http://localhost:6333",
-    llm_provider: Optional[LLMProvider] = None,
-    embedding_provider: Optional[EmbeddingProvider] = None,
-    vector_store: Optional[VectorStore] = None,
-    api_keys: Optional[Set[str]] = None,
+    llm_provider: LLMProvider | None = None,
+    embedding_provider: EmbeddingProvider | None = None,
+    vector_store: VectorStore | None = None,
+    api_keys: set[str] | None = None,
 ) -> FastAPI:
     """Create and configure FASTAPI application.
 
@@ -133,7 +135,7 @@ def create_app(
 
     @app.post("/chat")
     async def chat(request: ChatRequest) -> StreamingResponse:
-        logger.info(f"Chat request received: {request.message[:50]}...")
+        logger.info(f"Chat request received: {request.message[:50]}{'...' if len(request.message) > 50 else ''}")
         return StreamingResponse(
             stream_chat_response(request.message, chat_engine),
             media_type="text/event-stream",
@@ -154,7 +156,7 @@ def create_app(
 
 async def stream_chat_response(
     message: str,
-    chat_engine,
+    chat_engine: "ChatEngine",
 ) -> AsyncGenerator[str, None]:
     """Stream chat response as SSE events using async LLM streaming."""
     from src.prompt import build_rag_prompt
@@ -173,16 +175,19 @@ async def stream_chat_response(
     system, user_prompt = build_rag_prompt(context_pages, message)
 
     logger.debug(f"Sending prompt to LLM ({len(user_prompt)} chars)")
-    stream = chat_engine.llm_provider.generate_stream_async(user_prompt, system=system)
-
-    chunk_count = 0
-    async for response_text in stream:
-        if response_text:
-            chunk_count += 1
-            yield f"data: {json.dumps({'text': response_text})}\n\n"
-
-    logger.info(f"Streamed {chunk_count} chunks, sending [DONE]")
-    yield "data: [DONE]\n\n"
+    try:
+        stream = chat_engine.llm_provider.generate_stream_async(user_prompt, system=system)
+        chunk_count = 0
+        async for response_text in stream:
+            if response_text:
+                chunk_count += 1
+                yield f"data: {json.dumps({'text': response_text})}\n\n"
+        logger.info(f"Streamed {chunk_count} chunks, sending [DONE]")
+    except Exception as e:
+        logger.error(f"Stream error: {e}")
+        yield f"data: {json.dumps({'error': str(e)})}\n\n"
+    finally:
+        yield "data: [DONE]\n\n"
 
 
 def run_server(

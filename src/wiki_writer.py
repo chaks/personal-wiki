@@ -1,9 +1,9 @@
+from __future__ import annotations
 # src/wiki_writer.py
 """Wiki page writer for entities and concepts."""
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
 
 from src.extractor import Entity, Concept
 from src.utils import slugify
@@ -32,7 +32,7 @@ class WikiPageWriter:
 
         logger.debug(f"WikiPageWriter initialized with wiki_dir: {wiki_dir}")
 
-    def write_entity(self, entity: Entity) -> Optional[Path]:
+    def write_entity(self, entity: Entity) -> Path | None:
         """Write an entity page.
 
         Args:
@@ -65,7 +65,7 @@ class WikiPageWriter:
             logger.error(f"Failed to write entity page for '{entity.name}': {e}")
             return None
 
-    def write_concept(self, concept: Concept) -> Optional[Path]:
+    def write_concept(self, concept: Concept) -> Path | None:
         """Write a concept page.
 
         Args:
@@ -107,7 +107,7 @@ class WikiPageWriter:
         Returns:
             Formatted markdown content with frontmatter
         """
-        created_at = datetime.now().isoformat()
+        created_at = datetime.now(timezone.utc).isoformat()
 
         # Build frontmatter
         frontmatter = [
@@ -150,7 +150,7 @@ class WikiPageWriter:
         Returns:
             Formatted markdown content with frontmatter
         """
-        created_at = datetime.now().isoformat()
+        created_at = datetime.now(timezone.utc).isoformat()
 
         # Build frontmatter
         frontmatter = [

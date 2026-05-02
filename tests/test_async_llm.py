@@ -28,13 +28,14 @@ class TestAsyncLLMProvider:
     @pytest.mark.asyncio
     async def test_ollama_provider_generate_stream_async(self):
         """OllamaProvider streams text asynchronously via ollama.chat."""
-        def sync_gen():
-            yield {"message": {"content": "chunk1"}}
-            yield {"message": {"content": "chunk2"}}
-            yield {"message": {"content": "chunk3"}}
+        mock_chunks = [
+            {"message": {"content": "chunk1"}},
+            {"message": {"content": "chunk2"}},
+            {"message": {"content": "chunk3"}},
+        ]
 
-        with patch("src.services.llm_provider.asyncio.get_event_loop") as mock_loop:
-            mock_loop.return_value.run_in_executor = AsyncMock(return_value=sync_gen())
+        with patch("src.services.llm_provider.asyncio.to_thread") as mock_to_thread:
+            mock_to_thread.return_value = mock_chunks
 
             provider = OllamaProvider(model="gemma4:e2b")
             chunks = []
@@ -67,8 +68,8 @@ class TestAsyncLLMProvider:
     @pytest.mark.asyncio
     async def test_ollama_provider_generate_stream_async_handles_exception(self):
         """OllamaProvider handles exceptions in async stream generate."""
-        with patch("src.services.llm_provider.asyncio.get_event_loop") as mock_loop:
-            mock_loop.return_value.run_in_executor = AsyncMock(side_effect=Exception("Connection error"))
+        with patch("src.services.llm_provider.asyncio.to_thread") as mock_to_thread:
+            mock_to_thread.side_effect = Exception("Connection error")
 
             provider = OllamaProvider(model="gemma4:e2b")
             with pytest.raises(Exception, match="Connection error"):

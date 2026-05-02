@@ -1,9 +1,9 @@
+from __future__ import annotations
 """Chat history persistence with SQLite."""
 import json
 import logging
 import sqlite3
 from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +38,24 @@ class ChatHistory:
             "CREATE INDEX IF NOT EXISTS idx_session ON chat_history(session_id)"
         )
         self.conn.commit()
+
+    @staticmethod
+    def _row_to_dict(row) -> dict:
+        """Convert a database row to a history entry dict."""
+        sources_str = row[4]
+        try:
+            sources = json.loads(sources_str) if sources_str else []
+        except json.JSONDecodeError:
+            logger.warning(f"Failed to parse sources for entry {row[0]}, using empty list")
+            sources = []
+        return {
+            "id": row[0],
+            "session_id": row[1],
+            "question": row[2],
+            "answer": row[3],
+            "sources": sources,
+            "created_at": row[5],
+        }
 
     def save(
         self,
@@ -84,22 +102,7 @@ class ChatHistory:
             (session_id,),
         )
         rows = cursor.fetchall()
-        results = []
-        for row in rows:
-            sources_str = row[4]
-            try:
-                sources = json.loads(sources_str) if sources_str else []
-            except json.JSONDecodeError:
-                logger.warning(f"Failed to parse sources for entry {row[0]}, using empty list")
-                sources = []
-            results.append({
-                "id": row[0],
-                "session_id": row[1],
-                "question": row[2],
-                "answer": row[3],
-                "sources": sources,
-                "created_at": row[5],
-            })
+        results = [self._row_to_dict(row) for row in rows]
         logger.debug(f"Retrieved {len(results)} entries for session {session_id}")
         return results
 
@@ -129,22 +132,7 @@ class ChatHistory:
             (session_id, limit),
         )
         rows = cursor.fetchall()
-        results = []
-        for row in rows:
-            sources_str = row[4]
-            try:
-                sources = json.loads(sources_str) if sources_str else []
-            except json.JSONDecodeError:
-                logger.warning(f"Failed to parse sources for entry {row[0]}, using empty list")
-                sources = []
-            results.append({
-                "id": row[0],
-                "session_id": row[1],
-                "question": row[2],
-                "answer": row[3],
-                "sources": sources,
-                "created_at": row[5],
-            })
+        results = [self._row_to_dict(row) for row in rows]
         logger.debug(f"Retrieved {len(results)} recent entries for session {session_id}")
         return results
 
@@ -160,3 +148,14 @@ class ChatHistory:
         )
         self.conn.commit()
         logger.info(f"Cleared chat history for session {session_id}")
+
+    def close(self) -> None:
+        """Close the database connection."""
+        self.conn.close()
+        logger.debug(f"ChatHistory connection closed for {self.db_path}")
+
+    async def __aenter__(self) -> "ChatHistory":
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+        self.close()

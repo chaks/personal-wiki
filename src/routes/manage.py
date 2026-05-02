@@ -1,9 +1,11 @@
+from __future__ import annotations
 """Source management API routes."""
 import re
 import yaml
+from pathlib import Path
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
+from typing import Optional
 
 from src.security.path_validation import validate_path_segment
 
@@ -19,7 +21,7 @@ class SourceInput(BaseModel):
     path: Optional[str] = Field(None, description="Path for file-based sources")
     url: Optional[str] = Field(None, description="URL for web sources")
     language: Optional[str] = Field(None, description="Language for code sources")
-    tags: List[str] = Field(default_factory=list, description="Tags for the source")
+    tags: list[str] = Field(default_factory=list, description="Tags for the source")
     enabled: bool = Field(default=True, description="Whether the source is enabled")
 
 
@@ -44,9 +46,6 @@ def _validate_url(url: str) -> None:
 
 def _resolve_sources_file() -> str:
     """Resolve the sources.yaml file path, checking multiple locations."""
-    import os
-    from pathlib import Path
-
     # Try relative to current working directory first
     sources_path = Path(SOURCES_FILE)
     if sources_path.exists():

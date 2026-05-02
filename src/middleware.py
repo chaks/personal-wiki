@@ -1,15 +1,14 @@
+from __future__ import annotations
 """Rate limiting middleware for the Personal Wiki Chat application."""
 import asyncio
 import time
 from collections import defaultdict
-from typing import Dict, List, Optional
-
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.responses import JSONResponse
 
 RATE_LIMIT_EXCEEDED_MSG = "Rate limit exceeded"
-_CLEANUP_THRESHOLD = 1000
+_CLEANUP_INTERVAL = 1000
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
@@ -25,9 +24,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self.max_requests = max_requests
         self.window_seconds = window_seconds
         # Track requests: {ip: [timestamp1, timestamp2, ...]}
-        self._request_history: Dict[str, List[float]] = defaultdict(list)
-        self._lock: Optional[asyncio.Lock] = None  # Created lazily
-        self._request_count = 0
+        self._request_history: dict[str, list[float]] = defaultdict(list)
+        self._lock: asyncio.Lock | None = None  # Created lazily
+        self._cleanup_counter = 0
 
     def _get_lock(self) -> asyncio.Lock:
         """Get or create the asyncio lock lazily."""
@@ -46,10 +45,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     def _maybe_cleanup(self) -> None:
         """Trigger cleanup periodically to prevent memory leaks."""
-        self._request_count += 1
-        if self._request_count >= _CLEANUP_THRESHOLD or len(self._request_history) > _CLEANUP_THRESHOLD:
+        self._cleanup_counter += 1
+        if self._cleanup_counter >= _CLEANUP_INTERVAL or len(self._request_history) > _CLEANUP_INTERVAL:
             self._cleanup()
-            self._request_count = 0
+            self._cleanup_counter = 0
 
     def _get_client_ip(self, request: Request) -> str:
         """Extract client IP from request.

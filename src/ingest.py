@@ -1,17 +1,14 @@
+from __future__ import annotations
 #!/usr/bin/env python3
 """Ingest sources from config/sources.yaml into wiki."""
 import asyncio
 import logging
-import sys
 import yaml
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Optional
 
-# Add parent directory to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # Initialize logging for CLI
 from src.logging_config import setup_logging
@@ -38,9 +35,9 @@ class SourceSpec:
     """Canonical representation of a source to ingest."""
     source_type: str
     source_id: str
-    file_path: Path = None
-    url: str = None
-    language: str = None
+    file_path: Path | None = None
+    url: str | None = None
+    language: str | None = None
     tags: list[str] = field(default_factory=list)
     markdown_full_pipeline: bool = False
 
@@ -98,12 +95,67 @@ class NullReporter(Reporter):
         pass
 
 
+def _build_adapter(spec: SourceSpec, wiki_dir: Path):
+    """Create the appropriate source adapter for the given source type."""
+    if spec.source_type == "url":
+        return URLSourceAdapter(url=spec.url, wiki_dir=wiki_dir)
+    if spec.source_type == "pdf":
+        return PDFSourceAdapter(
+            source_path=spec.file_path,
+            wiki_dir=wiki_dir,
+            output_dir=wiki_dir / "generated",
+        )
+    if spec.source_type == "markdown" and spec.markdown_full_pipeline:
+        return PDFSourceAdapter(
+            source_path=spec.file_path,
+            wiki_dir=wiki_dir,
+            output_dir=wiki_dir / "generated",
+        )
+    if spec.source_type == "markdown":
+        return MarkdownCopyAdapter(source_path=spec.file_path, wiki_dir=wiki_dir)
+    if spec.source_type == "code":
+        return CodeSourceAdapter(
+            code_dir=spec.file_path,
+            wiki_dir=wiki_dir,
+            language=spec.language or "python",
+        )
+    return None
+
+
+def _record_result(
+    spec: SourceSpec,
+    result,
+    wiki_dir: Path,
+    registry: SourceRegistry | None,
+    reporter: Reporter,
+    content_hash: str = "",
+) -> IngestOutcome:
+    """Record the ingestion result and return the outcome."""
+    if result.success:
+        reporter.success(spec.file_path.name, result.output_path)
+        if registry:
+            registry.record_successful_ingestion(
+                source_id=spec.source_id,
+                source_type=spec.source_type,
+                path=str(spec.file_path),
+                content_hash=content_hash,
+                tags=spec.tags,
+                wiki_page_path=str(result.output_path),
+            )
+        return IngestOutcome.PROCESSED
+    else:
+        reporter.failure(spec.file_path.name, result.error)
+        if registry:
+            registry.update_status(spec.source_id, SourceStatus.FAILED, result.error)
+        return IngestOutcome.FAILED
+
+
 async def run_source_async(
     spec: SourceSpec,
     wiki_dir: Path,
-    registry: Optional[SourceRegistry],
+    registry: SourceRegistry | None,
     reporter: Reporter,
-    stages: Optional[dict] = None,
+    stages: dict | None = None,
 ) -> IngestOutcome:
     """Run ingestion asynchronously for a single source.
 
@@ -120,6 +172,7 @@ async def run_source_async(
     if stages is None:
         stages = create_default_pipeline_stages(wiki_dir)
 
+    # URL source
     if spec.source_type == "url":
         reporter.ingesting(f"URL: {spec.url}")
         adapter = URLSourceAdapter(url=spec.url, wiki_dir=wiki_dir)
@@ -163,78 +216,25 @@ async def run_source_async(
     reporter.ingesting(spec.file_path.name)
     logger.info(f"Ingesting: {spec.file_path.name}")
 
-    if spec.source_type == "pdf" or (spec.source_type == "markdown" and spec.markdown_full_pipeline):
-        adapter = PDFSourceAdapter(
-            source_path=spec.file_path,
-            wiki_dir=wiki_dir,
-            output_dir=wiki_dir / "generated",
-        )
-        result = await adapter.run_async(
-            extract_stage=stages.get("extract"),
-            write_stage=stages.get("write"),
-            resolve_stage=stages.get("resolve"),
-            index_stage=stages.get("index"),
-        )
-    elif spec.source_type == "markdown":
-        # Copy-only path now unified
-        adapter = MarkdownCopyAdapter(source_path=spec.file_path, wiki_dir=wiki_dir)
-        result = await adapter.run_async()
-        if result.success:
-            reporter.success(spec.file_path.name, result.output_path)
-            if registry:
-                registry.record_successful_ingestion(
-                    source_id=spec.source_id,
-                    source_type=spec.source_type,
-                    path=str(spec.file_path),
-                    content_hash=content_hash,
-                    tags=spec.tags,
-                    wiki_page_path=str(result.output_path),
-                )
-            return IngestOutcome.PROCESSED
-        else:
-            reporter.failure(spec.file_path.name, result.error)
-            if registry:
-                registry.update_status(spec.source_id, SourceStatus.FAILED, result.error)
-            return IngestOutcome.FAILED
-    elif spec.source_type == "code":
-        adapter = CodeSourceAdapter(
-            code_dir=spec.file_path,
-            wiki_dir=wiki_dir,
-            language=spec.language or "python",
-        )
-        result = await adapter.run_async(
-            extract_stage=stages.get("extract"),
-            write_stage=stages.get("write"),
-            resolve_stage=stages.get("resolve"),
-            index_stage=stages.get("index"),
-        )
-    else:
+    adapter = _build_adapter(spec, wiki_dir)
+    if adapter is None:
         reporter.failure(spec.source_id, f"Unknown source type: {spec.source_type}")
         return IngestOutcome.FAILED
 
-    if result.success:
-        reporter.success(spec.file_path.name, result.output_path)
-        if registry:
-            registry.record_successful_ingestion(
-                source_id=spec.source_id,
-                source_type=spec.source_type,
-                path=str(spec.file_path),
-                content_hash=content_hash,
-                tags=spec.tags,
-                wiki_page_path=str(result.output_path),
-            )
-        return IngestOutcome.PROCESSED
-    else:
-        reporter.failure(spec.file_path.name, result.error)
-        if registry:
-            registry.update_status(spec.source_id, SourceStatus.FAILED, result.error)
-        return IngestOutcome.FAILED
+    result = await adapter.run_async(
+        extract_stage=stages.get("extract"),
+        write_stage=stages.get("write"),
+        resolve_stage=stages.get("resolve"),
+        index_stage=stages.get("index"),
+    )
+
+    return _record_result(spec, result, wiki_dir, registry, reporter, content_hash)
 
 
 def run_source(
     spec: SourceSpec,
     wiki_dir: Path,
-    registry: Optional[SourceRegistry],
+    registry: SourceRegistry | None,
     reporter: Reporter,
 ) -> IngestOutcome:
     """Run ingestion for a single source (deprecated sync wrapper)."""

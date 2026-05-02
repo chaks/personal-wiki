@@ -1,10 +1,15 @@
+from __future__ import annotations
 # src/chat.py
 """Chat query handling with RAG."""
+import asyncio
 import logging
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import TYPE_CHECKING
 
 from src.services.llm_provider import LLMProvider, OllamaProvider
+
+if TYPE_CHECKING:
+    from src.indexer import WikiIndexer
 
 logger = logging.getLogger(__name__)
 
@@ -15,16 +20,16 @@ class ChatEngine:
     def __init__(
         self,
         wiki_dir: Path,
-        indexer,
-        llm_provider: Optional[LLMProvider] = None,
+        indexer: "WikiIndexer",
+        llm_provider: "LLMProvider | None" = None,
     ):
         self.wiki_dir = Path(wiki_dir)
         self.indexer = indexer
         self.llm_provider = llm_provider or OllamaProvider()
         logger.debug(f"ChatEngine initialized with wiki_dir={wiki_dir}, llm_provider={type(self.llm_provider).__name__}")
 
-    def _keyword_search(self, query: str, top_k: int) -> list[dict]:
-        """Simple keyword search as fallback."""
+    def _keyword_search_sync(self, query: str, top_k: int) -> list[dict]:
+        """Simple keyword search as fallback (sync, runs in thread)."""
         logger.debug(f"Starting keyword search for: {query[:50]}...")
         results = []
         query_lower = query.lower()
@@ -42,6 +47,10 @@ class ChatEngine:
         logger.info(f"Keyword search returned {len(results)} results")
         return results[:top_k]
 
+    async def _keyword_search(self, query: str, top_k: int) -> list[dict]:
+        """Async wrapper for keyword search fallback."""
+        return await asyncio.to_thread(self._keyword_search_sync, query, top_k)
+
     async def search_async(self, query: str, top_k: int = 5) -> list[dict]:
         """Asynchronously search wiki for relevant context."""
         logger.info(f"Async search request: query='{query[:50]}...', top_k={top_k}")
@@ -55,9 +64,9 @@ class ChatEngine:
         except Exception as e:
             logger.warning(f"Async vector search failed: {e}, falling back to keyword search")
             # Fallback: keyword search over wiki files
-            return self._keyword_search(query, top_k)
+            return await self._keyword_search(query, top_k)
 
-    async def query_async(self, query: str, top_k: int = 5) -> Tuple[str, list[dict]]:
+    async def query_async(self, query: str, top_k: int = 5) -> tuple[str, list[dict]]:
         """Asynchronously query the wiki and get an answer.
 
         Args:

@@ -1,9 +1,10 @@
+from __future__ import annotations
 """Vector store abstraction for external service decoupling."""
 import asyncio
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +15,7 @@ class SearchPoint:
     id: Any
     score: float
     payload: dict
-    vector: Optional[list[float]] = None
+    vector: list[float] | None = None
 
 
 class VectorStore(ABC):
