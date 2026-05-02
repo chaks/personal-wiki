@@ -9,7 +9,7 @@
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: 'Inter', sans-serif; background: #0f1117; color: #e1e4ea; min-height: 100vh; padding: 2rem; }
+  body { font-family: 'Inter', sans-serif; background: #1c1f2e; color: #e1e4ea; min-height: 100vh; padding: 2rem; }
 
   .layer { opacity: 0; animation: fadeSlideIn 0.6s ease forwards; }
   .layer:nth-child(1) { animation-delay: 0.1s; }
@@ -47,7 +47,7 @@
   .port-top {
     top: -6px; left: 50%; transform: translateX(-50%);
     border: 2px solid var(--pc);
-    background: #0f1117;
+    background: #1c1f2e;
   }
   .port-bottom {
     bottom: -6px; left: 50%; transform: translateX(-50%);
@@ -57,7 +57,7 @@
   .port-left {
     top: 50%; left: -6px; transform: translateY(-50%);
     border: 2px solid var(--pc);
-    background: #0f1117;
+    background: #1c1f2e;
   }
   .port-right {
     top: 50%; right: -6px; left: auto; transform: translateY(-50%);
@@ -90,16 +90,14 @@
   <!-- Title -->
   <div class="mb-8 text-center">
     <h1 class="text-3xl font-bold tracking-tight text-white">Personal Wiki — Architecture</h1>
-    <p class="text-sm text-gray-500 mt-2">Local AI knowledge base · Ollama + Qdrant + FastAPI</p>
+    <p class="text-sm text-gray-400 mt-2">Local AI knowledge base · Ollama + Qdrant + FastAPI</p>
   </div>
 
   <!-- Legend -->
   <div class="flex flex-wrap justify-center gap-5 mb-8 text-xs">
-    <span class="legend-item flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-blue-500 inline-block"></span>Client</span>
-    <span class="legend-item flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-purple-500 inline-block"></span>API / Backend</span>
-    <span class="legend-item flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-emerald-500 inline-block"></span>Database / Storage</span>
-    <span class="legend-item flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-orange-500 inline-block"></span>External Services</span>
-    <span class="legend-item flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-gray-500 inline-block"></span>Infrastructure</span>
+    <span class="legend-item flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-blue-500 inline-block"></span>Chat Flow</span>
+    <span class="legend-item flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-orange-500 inline-block"></span>Ingestion Flow</span>
+    <span class="legend-item flex items-center gap-2"><span class="w-6 border-t-2 border-dashed border-gray-400 inline-block"></span>Metadata / Async</span>
   </div>
 
   <!-- ======================== DIAGRAM WRAPPER ======================== -->
@@ -111,17 +109,8 @@
         <marker id="ah-blue" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto">
           <polygon points="0 0, 7 2.5, 0 5" fill="#3b82f6" opacity="0.6"/>
         </marker>
-        <marker id="ah-purple" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto">
-          <polygon points="0 0, 7 2.5, 0 5" fill="#a855f7" opacity="0.6"/>
-        </marker>
         <marker id="ah-orange" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto">
           <polygon points="0 0, 7 2.5, 0 5" fill="#f97316" opacity="0.6"/>
-        </marker>
-        <marker id="ah-green" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto">
-          <polygon points="0 0, 7 2.5, 0 5" fill="#10b981" opacity="0.6"/>
-        </marker>
-        <marker id="ah-gray" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto">
-          <polygon points="0 0, 7 2.5, 0 5" fill="#6b7280" opacity="0.6"/>
         </marker>
       </defs>
       <!-- paths injected by JS -->
@@ -132,14 +121,14 @@
 
       <!-- ===== LAYER 0: CLIENT ===== -->
       <div class="layer">
-        <div class="text-xs font-semibold uppercase tracking-widest text-gray-600 mb-3">Client Layer</div>
+        <div class="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">Client Layer</div>
         <div class="flex justify-center gap-24">
           <div id="browser" class="comp bg-blue-500/10 border border-blue-500/30 rounded-xl px-6 py-4 text-center min-w-[180px]" style="--pc:#3b82f6;">
             <div class="port port-top"></div>
             <div class="port port-bottom"></div>
             <div class="text-blue-400 text-sm font-semibold">Web Browser</div>
-            <div class="text-gray-500 text-xs mt-1">Chat · Manage · Browse</div>
-            <div class="tip absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-gray-800 text-gray-200 text-xs rounded-lg px-3 py-2 shadow-xl whitespace-nowrap z-50">
+            <div class="text-gray-400 text-xs mt-1">Chat · Manage · Browse</div>
+            <div class="tip absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-gray-700 text-gray-200 text-xs rounded-lg px-3 py-2 shadow-xl whitespace-nowrap z-50">
               localhost:8000 · /manage · /browse
               <div class="absolute top-full left-1/2 -translate-x-1/2 border-[5px] border-transparent border-t-gray-800"></div>
             </div>
@@ -148,8 +137,8 @@
             <div class="port port-top"></div>
             <div class="port port-bottom"></div>
             <div class="text-blue-400 text-sm font-semibold">CLI</div>
-            <div class="text-gray-500 text-xs mt-1">make ingest · lint-wiki</div>
-            <div class="tip absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-gray-800 text-gray-200 text-xs rounded-lg px-3 py-2 shadow-xl whitespace-nowrap z-50">
+            <div class="text-gray-400 text-xs mt-1">make ingest · lint-wiki</div>
+            <div class="tip absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-gray-700 text-gray-200 text-xs rounded-lg px-3 py-2 shadow-xl whitespace-nowrap z-50">
               Ingestion & wiki lint commands
               <div class="absolute top-full left-1/2 -translate-x-1/2 border-[5px] border-transparent border-t-gray-800"></div>
             </div>
@@ -162,14 +151,14 @@
 
       <!-- ===== LAYER 1: API ===== -->
       <div class="layer">
-        <div class="text-xs font-semibold uppercase tracking-widest text-gray-600 mb-3">API Layer</div>
+        <div class="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">API Layer</div>
         <div class="flex justify-center">
           <div id="fastapi" class="comp bg-purple-500/10 border border-purple-500/30 rounded-xl px-10 py-5 text-center min-w-[360px]" style="--pc:#a855f7;">
             <div class="port port-top"></div>
             <div class="port port-bottom"></div>
             <div class="text-purple-400 text-sm font-semibold">FastAPI Server</div>
-            <div class="text-gray-500 text-xs mt-1">create_app() · Middleware · SSE · Security</div>
-            <div class="tip absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-gray-800 text-gray-200 text-xs rounded-lg px-3 py-2 shadow-xl whitespace-nowrap z-50">
+            <div class="text-gray-400 text-xs mt-1">create_app() · Middleware · SSE · Security</div>
+            <div class="tip absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-gray-700 text-gray-200 text-xs rounded-lg px-3 py-2 shadow-xl whitespace-nowrap z-50">
               Auth · Rate Limit · Path Validation · Prompt Injection Guard
               <div class="absolute top-full left-1/2 -translate-x-1/2 border-[5px] border-transparent border-t-gray-800"></div>
             </div>
@@ -182,14 +171,14 @@
 
       <!-- ===== LAYER 2: APP SERVICES ===== -->
       <div class="layer">
-        <div class="text-xs font-semibold uppercase tracking-widest text-gray-600 mb-3">Application Services</div>
+        <div class="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">Application Services</div>
         <div class="flex justify-center gap-12">
           <div id="chatengine" class="comp bg-purple-500/10 border border-purple-500/30 rounded-xl px-5 py-4 text-center min-w-[160px]" style="--pc:#a855f7;">
             <div class="port port-top"></div>
             <div class="port port-bottom"></div>
             <div class="text-purple-400 text-sm font-semibold">ChatEngine</div>
-            <div class="text-gray-500 text-xs mt-1">RAG · Retrieval</div>
-            <div class="tip absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-gray-800 text-gray-200 text-xs rounded-lg px-3 py-2 shadow-xl whitespace-nowrap z-50">
+            <div class="text-gray-400 text-xs mt-1">RAG · Retrieval</div>
+            <div class="tip absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-gray-700 text-gray-200 text-xs rounded-lg px-3 py-2 shadow-xl whitespace-nowrap z-50">
               build_rag_prompt() · wiki retrieval · SSE
               <div class="absolute top-full left-1/2 -translate-x-1/2 border-[5px] border-transparent border-t-gray-800"></div>
             </div>
@@ -198,8 +187,8 @@
             <div class="port port-top"></div>
             <div class="port port-bottom"></div>
             <div class="text-purple-400 text-sm font-semibold">Source Routes</div>
-            <div class="text-gray-500 text-xs mt-1">CRUD · Catalog</div>
-            <div class="tip absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-gray-800 text-gray-200 text-xs rounded-lg px-3 py-2 shadow-xl whitespace-nowrap z-50">
+            <div class="text-gray-400 text-xs mt-1">CRUD · Catalog</div>
+            <div class="tip absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-gray-700 text-gray-200 text-xs rounded-lg px-3 py-2 shadow-xl whitespace-nowrap z-50">
               GET/POST/PUT/DELETE /api/sources
               <div class="absolute top-full left-1/2 -translate-x-1/2 border-[5px] border-transparent border-t-gray-800"></div>
             </div>
@@ -208,8 +197,8 @@
             <div class="port port-top"></div>
             <div class="port port-bottom"></div>
             <div class="text-purple-400 text-sm font-semibold">Wiki Routes</div>
-            <div class="text-gray-500 text-xs mt-1">Pages · Browse</div>
-            <div class="tip absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-gray-800 text-gray-200 text-xs rounded-lg px-3 py-2 shadow-xl whitespace-nowrap z-50">
+            <div class="text-gray-400 text-xs mt-1">Pages · Browse</div>
+            <div class="tip absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-gray-700 text-gray-200 text-xs rounded-lg px-3 py-2 shadow-xl whitespace-nowrap z-50">
               GET /api/wiki/pages · markdown render
               <div class="absolute top-full left-1/2 -translate-x-1/2 border-[5px] border-transparent border-t-gray-800"></div>
             </div>
@@ -219,8 +208,8 @@
             <div class="port port-bottom"></div>
             <div class="port port-right"></div>
             <div class="text-purple-400 text-sm font-semibold">Ingestion Pipeline</div>
-            <div class="text-gray-500 text-xs mt-1">Extract → Write → Index</div>
-            <div class="tip absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-gray-800 text-gray-200 text-xs rounded-lg px-3 py-2 shadow-xl whitespace-nowrap z-50">
+            <div class="text-gray-400 text-xs mt-1">Extract → Write → Index</div>
+            <div class="tip absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-gray-700 text-gray-200 text-xs rounded-lg px-3 py-2 shadow-xl whitespace-nowrap z-50">
               PDF · URL · Code · Markdown adapters
               <div class="absolute top-full left-1/2 -translate-x-1/2 border-[5px] border-transparent border-t-gray-800"></div>
             </div>
@@ -233,14 +222,14 @@
 
       <!-- ===== LAYER 3: SERVICE PROVIDERS ===== -->
       <div class="layer">
-        <div class="text-xs font-semibold uppercase tracking-widest text-gray-600 mb-3">Service Providers</div>
+        <div class="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">Service Providers</div>
         <div class="flex justify-center gap-10">
           <div id="llm" class="comp bg-orange-500/10 border border-orange-500/30 rounded-xl px-5 py-4 text-center min-w-[155px]" style="--pc:#f97316;">
             <div class="port port-top"></div>
             <div class="port port-bottom"></div>
             <div class="text-orange-400 text-sm font-semibold">LLM Provider</div>
-            <div class="text-gray-500 text-xs mt-1">gemma4:e2b · async</div>
-            <div class="tip absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-gray-800 text-gray-200 text-xs rounded-lg px-3 py-2 shadow-xl whitespace-nowrap z-50">
+            <div class="text-gray-400 text-xs mt-1">gemma4:e2b · async</div>
+            <div class="tip absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-gray-700 text-gray-200 text-xs rounded-lg px-3 py-2 shadow-xl whitespace-nowrap z-50">
               Entity extraction · Chat · Wiki gen
               <div class="absolute top-full left-1/2 -translate-x-1/2 border-[5px] border-transparent border-t-gray-800"></div>
             </div>
@@ -249,8 +238,8 @@
             <div class="port port-top"></div>
             <div class="port port-bottom"></div>
             <div class="text-emerald-400 text-sm font-semibold">VectorStore</div>
-            <div class="text-gray-500 text-xs mt-1">Semantic search</div>
-            <div class="tip absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-gray-800 text-gray-200 text-xs rounded-lg px-3 py-2 shadow-xl whitespace-nowrap z-50">
+            <div class="text-gray-400 text-xs mt-1">Semantic search</div>
+            <div class="tip absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-gray-700 text-gray-200 text-xs rounded-lg px-3 py-2 shadow-xl whitespace-nowrap z-50">
               Qdrant client · nomic-embed · dedup
               <div class="absolute top-full left-1/2 -translate-x-1/2 border-[5px] border-transparent border-t-gray-800"></div>
             </div>
@@ -259,8 +248,8 @@
             <div class="port port-top"></div>
             <div class="port port-bottom"></div>
             <div class="text-purple-400 text-sm font-semibold">Source Registry</div>
-            <div class="text-gray-500 text-xs mt-1">SHA256 · Change detect</div>
-            <div class="tip absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-gray-800 text-gray-200 text-xs rounded-lg px-3 py-2 shadow-xl whitespace-nowrap z-50">
+            <div class="text-gray-400 text-xs mt-1">SHA256 · Change detect</div>
+            <div class="tip absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-gray-700 text-gray-200 text-xs rounded-lg px-3 py-2 shadow-xl whitespace-nowrap z-50">
               state/registry.yaml · skip unchanged
               <div class="absolute top-full left-1/2 -translate-x-1/2 border-[5px] border-transparent border-t-gray-800"></div>
             </div>
@@ -269,8 +258,8 @@
             <div class="port port-top"></div>
             <div class="port port-bottom"></div>
             <div class="text-emerald-400 text-sm font-semibold">Wiki Filesystem</div>
-            <div class="text-gray-500 text-xs mt-1">entities / concepts</div>
-            <div class="tip absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-gray-800 text-gray-200 text-xs rounded-lg px-3 py-2 shadow-xl whitespace-nowrap z-50">
+            <div class="text-gray-400 text-xs mt-1">entities / concepts</div>
+            <div class="tip absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-gray-700 text-gray-200 text-xs rounded-lg px-3 py-2 shadow-xl whitespace-nowrap z-50">
               LLM-maintained markdown wiki
               <div class="absolute top-full left-1/2 -translate-x-1/2 border-[5px] border-transparent border-t-gray-800"></div>
             </div>
@@ -279,8 +268,8 @@
             <div class="port port-top"></div>
             <div class="port port-bottom"></div>
             <div class="text-emerald-400 text-sm font-semibold">Indexer</div>
-            <div class="text-gray-500 text-xs mt-1">Async Qdrant index</div>
-            <div class="tip absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-gray-800 text-gray-200 text-xs rounded-lg px-3 py-2 shadow-xl whitespace-nowrap z-50">
+            <div class="text-gray-400 text-xs mt-1">Async Qdrant index</div>
+            <div class="tip absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-gray-700 text-gray-200 text-xs rounded-lg px-3 py-2 shadow-xl whitespace-nowrap z-50">
               Chunk-level dedup · embeddings
               <div class="absolute top-full left-1/2 -translate-x-1/2 border-[5px] border-transparent border-t-gray-800"></div>
             </div>
@@ -293,14 +282,14 @@
 
       <!-- ===== LAYER 4: EXTERNAL ===== -->
       <div class="layer">
-        <div class="text-xs font-semibold uppercase tracking-widest text-gray-600 mb-3">External Services & Storage</div>
+        <div class="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">External Services & Storage</div>
         <div class="flex justify-center gap-12">
           <div id="ollama" class="comp bg-orange-500/10 border border-orange-500/30 rounded-xl px-7 py-5 text-center min-w-[170px]" style="--pc:#f97316;">
             <div class="port port-top"></div>
             <div class="pulse-ring absolute inset-0 rounded-xl border-2 border-orange-500/20"></div>
             <div class="text-orange-400 text-sm font-semibold relative z-10">Ollama</div>
-            <div class="text-gray-500 text-xs mt-1 relative z-10">gemma4:e2b · nomic-embed</div>
-            <div class="tip absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-gray-800 text-gray-200 text-xs rounded-lg px-3 py-2 shadow-xl whitespace-nowrap z-50">
+            <div class="text-gray-400 text-xs mt-1 relative z-10">gemma4:e2b · nomic-embed</div>
+            <div class="tip absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-gray-700 text-gray-200 text-xs rounded-lg px-3 py-2 shadow-xl whitespace-nowrap z-50">
               Local LLM runtime · embeddings + generation
               <div class="absolute top-full left-1/2 -translate-x-1/2 border-[5px] border-transparent border-t-gray-800"></div>
             </div>
@@ -309,8 +298,8 @@
             <div class="port port-top"></div>
             <div class="pulse-ring absolute inset-0 rounded-xl border-2 border-emerald-500/20"></div>
             <div class="text-emerald-400 text-sm font-semibold relative z-10">Qdrant</div>
-            <div class="text-gray-500 text-xs mt-1 relative z-10">Vector DB · Docker</div>
-            <div class="tip absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-gray-800 text-gray-200 text-xs rounded-lg px-3 py-2 shadow-xl whitespace-nowrap z-50">
+            <div class="text-gray-400 text-xs mt-1 relative z-10">Vector DB · Docker</div>
+            <div class="tip absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-gray-700 text-gray-200 text-xs rounded-lg px-3 py-2 shadow-xl whitespace-nowrap z-50">
               Semantic index · port 6333 · snapshots
               <div class="absolute top-full left-1/2 -translate-x-1/2 border-[5px] border-transparent border-t-gray-800"></div>
             </div>
@@ -318,8 +307,8 @@
           <div id="disk" class="comp bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-7 py-5 text-center min-w-[170px]" style="--pc:#10b981;">
             <div class="port port-top"></div>
             <div class="text-emerald-400 text-sm font-semibold">Disk (wiki/)</div>
-            <div class="text-gray-500 text-xs mt-1">Markdown files</div>
-            <div class="tip absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-gray-800 text-gray-200 text-xs rounded-lg px-3 py-2 shadow-xl whitespace-nowrap z-50">
+            <div class="text-gray-400 text-xs mt-1">Markdown files</div>
+            <div class="tip absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-gray-700 text-gray-200 text-xs rounded-lg px-3 py-2 shadow-xl whitespace-nowrap z-50">
               wiki/entities/ · wiki/concepts/ · wiki/generated/
               <div class="absolute top-full left-1/2 -translate-x-1/2 border-[5px] border-transparent border-t-gray-800"></div>
             </div>
@@ -328,8 +317,8 @@
             <div class="port port-top"></div>
             <div class="port port-right"></div>
             <div class="text-gray-400 text-sm font-semibold">Source Files</div>
-            <div class="text-gray-500 text-xs mt-1">PDFs · URLs · Code</div>
-            <div class="tip absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-gray-800 text-gray-200 text-xs rounded-lg px-3 py-2 shadow-xl whitespace-nowrap z-50">
+            <div class="text-gray-400 text-xs mt-1">PDFs · URLs · Code</div>
+            <div class="tip absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-gray-700 text-gray-200 text-xs rounded-lg px-3 py-2 shadow-xl whitespace-nowrap z-50">
               sources/ · immutable inputs
               <div class="absolute top-full left-1/2 -translate-x-1/2 border-[5px] border-transparent border-t-gray-800"></div>
             </div>
@@ -341,20 +330,20 @@
   </div><!-- /relative diagram -->
 
   <!-- ======================== DATA FLOW FOOTER ======================== -->
-  <div class="layer mt-10 border-t border-gray-800/60 pt-6">
+  <div class="layer mt-10 border-t border-gray-700/50 pt-6">
     <div class="text-xs font-semibold uppercase tracking-widest text-gray-600 mb-4">Data Flow Summary</div>
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-      <div class="bg-gray-800/40 rounded-lg p-4 border border-gray-700/30">
+      <div class="bg-gray-700/30 rounded-lg p-4 border border-gray-600/30">
         <div class="text-blue-400 font-medium mb-1">Chat Flow</div>
-        <div class="text-gray-400 text-xs leading-relaxed">Browser → FastAPI → ChatEngine → VectorStore (retrieve) → LLM (generate) → SSE stream back</div>
+        <div class="text-gray-300 text-xs leading-relaxed">Browser → FastAPI → ChatEngine → VectorStore (retrieve) → LLM (generate) → SSE stream back</div>
       </div>
-      <div class="bg-gray-800/40 rounded-lg p-4 border border-gray-700/30">
-        <div class="text-purple-400 font-medium mb-1">Ingestion Flow</div>
-        <div class="text-gray-400 text-xs leading-relaxed">Sources → Docling/Adapters → LLM Extract → Wiki Pages → Indexer → Qdrant · SHA256 registry</div>
+      <div class="bg-gray-700/30 rounded-lg p-4 border border-gray-600/30">
+        <div class="text-orange-400 font-medium mb-1">Ingestion Flow</div>
+        <div class="text-gray-300 text-xs leading-relaxed">Sources → Docling/Adapters → LLM Extract → Wiki Pages → Indexer → Qdrant · SHA256 registry</div>
       </div>
-      <div class="bg-gray-800/40 rounded-lg p-4 border border-gray-700/30">
+      <div class="bg-gray-700/30 rounded-lg p-4 border border-gray-600/30">
         <div class="text-emerald-400 font-medium mb-1">Wiki Structure</div>
-        <div class="text-gray-400 text-xs leading-relaxed">
+        <div class="text-gray-300 text-xs leading-relaxed">
           <code class="text-orange-300">wiki/entities/</code> — people, orgs, tech<br>
           <code class="text-orange-300">wiki/concepts/</code> — theories, patterns<br>
           <code class="text-orange-300">wiki/generated/</code> — raw summaries
@@ -367,32 +356,27 @@
 
 <script>
 // ---- connection map: {fromId, toId, color, dashed?, label?} ----
-const markerMap = { '#3b82f6': 'ah-blue', '#a855f7': 'ah-purple', '#f97316': 'ah-orange', '#10b981': 'ah-green', '#6b7280': 'ah-gray', '#9ca3af': 'ah-gray' };
+const markerMap = { '#3b82f6': 'ah-blue', '#f97316': 'ah-orange' };
 
 const connections = [
-  // Client → API
+  // ========== CHAT FLOW (blue) ==========
   { from: 'browser',     to: 'fastapi',     color: '#3b82f6' },
-  { from: 'cli',         to: 'fastapi',     color: '#3b82f6' },
-  // API → App Services
-  { from: 'fastapi',     to: 'chatengine',  color: '#a855f7' },
-  { from: 'fastapi',     to: 'sourceroutes',color: '#a855f7' },
-  { from: 'fastapi',     to: 'wikiroutes',  color: '#a855f7' },
-  { from: 'fastapi',     to: 'pipeline',    color: '#a855f7' },
-  // ChatEngine → LLM + VectorStore
-  { from: 'chatengine',  to: 'llm',         color: '#a855f7' },
-  { from: 'chatengine',  to: 'vectorstore', color: '#a855f7' },
-  // Ingestion Pipeline → LLM + WikiFS + Indexer + Registry
-  { from: 'pipeline',    to: 'llm',         color: '#a855f7' },
-  { from: 'pipeline',    to: 'wikifs',      color: '#a855f7' },
-  { from: 'pipeline',    to: 'indexer',     color: '#a855f7' },
-  { from: 'pipeline',    to: 'registry',    color: '#6b7280', dashed: true },
-  // Providers → External
-  { from: 'llm',         to: 'ollama',      color: '#f97316' },
-  { from: 'vectorstore', to: 'qdrant',      color: '#10b981' },
-  { from: 'wikifs',      to: 'disk',        color: '#10b981' },
-  { from: 'indexer',     to: 'qdrant',      color: '#10b981', dashed: true },
-  // Source Files → Pipeline (dashed, routed along right edge)
-  { from: 'sources',     to: 'pipeline',    color: '#9ca3af', dashed: true, route: 'side-right' },
+  { from: 'fastapi',     to: 'chatengine',  color: '#3b82f6' },
+  { from: 'chatengine',  to: 'llm',         color: '#3b82f6' },
+  { from: 'chatengine',  to: 'vectorstore', color: '#3b82f6' },
+  { from: 'llm',         to: 'ollama',      color: '#3b82f6' },
+  { from: 'vectorstore', to: 'qdrant',      color: '#3b82f6' },
+
+  // ========== INGESTION FLOW (orange) ==========
+  { from: 'cli',         to: 'fastapi',     color: '#f97316' },
+  { from: 'fastapi',     to: 'pipeline',    color: '#f97316' },
+  { from: 'pipeline',    to: 'llm',         color: '#f97316' },
+  { from: 'pipeline',    to: 'wikifs',      color: '#f97316' },
+  { from: 'pipeline',    to: 'indexer',     color: '#f97316' },
+  { from: 'pipeline',    to: 'registry',    color: '#f97316', dashed: true },
+  { from: 'sources',     to: 'pipeline',    color: '#f97316', dashed: true, route: 'side-right' },
+  { from: 'wikifs',      to: 'disk',        color: '#f97316' },
+  { from: 'indexer',     to: 'qdrant',      color: '#f97316', dashed: true },
 ];
 
 function portPos(id, side) {
